@@ -168,11 +168,12 @@ jobs:
         if: failure()
         shell: bash
         run: |
+          set +eo pipefail
           for f in prepare.log; do
             [ -f "$f" ] || continue
-            errs=$(tr -d '\r' < "$f" | grep -E 'error C|error LNK|CMake Error|FAILED|Traceback|Error:|error:' | head -n 30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            errs=$(tr -d '\r' < "$f" | grep -aE 'error C|error LNK|fatal error|CMake Error|FAILED|Traceback|Error:|error:|not enough space|No space left|out of memory|heap space' | head -n 30 | cut -c1-400 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
             [ -n "$errs" ] && echo "::error title=$f errors::$errs"
-            tail_=$(tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | tail -n 40 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            tail_=$(tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | tail -n 40 | cut -c1-400 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
             echo "::error title=$f tail::$tail_"
           done
 
@@ -298,10 +299,11 @@ jobs:
         if: failure()
         shell: bash
         run: |
+          set +eo pipefail
           for f in prepare.log build.log; do
             [ -f "$f" ] || continue
-            errs=$(tr -d '\r' < "$f" | grep -E 'error C|error LNK|CMake Error|FAILED|Traceback|Error:|error:' | head -n 30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            errs=$(tr -d '\r' < "$f" | grep -aE 'error C|error LNK|fatal error|CMake Error|FAILED|Traceback|Error:|error:|not enough space|No space left|out of memory|heap space' | head -n 30 | cut -c1-400 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
             [ -n "$errs" ] && echo "::error title=$f errors::$errs"
-            tail_=$(tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | tail -n 40 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            tail_=$(tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | tail -n 40 | cut -c1-400 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
             echo "::error title=$f tail::$tail_"
           done
