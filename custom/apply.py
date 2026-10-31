@@ -329,6 +329,20 @@ def apply_original_look():
     for fn in ("isExteraPeer", "isSupporterPeer", "isCustomBadgePeer"):
         insert_after_line(helpers, f"bool {fn}(ID peerId) {{", "\treturn false;")
 
+    print("Строка «…ToS-breaking features» под логотипом в настройках — убрать:")
+    replace(src + "ayu/ui/settings/settings_main.cpp",
+            "\tbuilder.addSkip();\n"
+            "\n"
+            "\tbuilder.add([](const WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {\n"
+            "\t\treturn {\n"
+            "\t\t\t.widget = object_ptr<Ui::FlatLabel>(\n"
+            "\t\t\t\tctx.container,\n"
+            "\t\t\t\ttr::ayu_SettingsDescription(),\n"
+            "\t\t\t\tst::centeredBoxLabel),\n"
+            "\t\t\t.align = style::al_top,\n"
+            "\t\t};\n"
+            "\t});\n", "")
+
     print("Ссылки и донат AyuGram в настройках — убрать:")
     replace(src + "ayu/ui/settings/settings_main.cpp", "\tBuildLinks(builder);\n", "")
     replace(src + "ayu/ui/settings/settings_other.cpp", "\tBuildDonations(builder);\n", "")
