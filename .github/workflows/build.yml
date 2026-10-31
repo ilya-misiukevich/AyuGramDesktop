@@ -106,12 +106,26 @@ jobs:
           restore-keys: ${{ runner.OS }}-x64-qt-
 
       - name: Libraries.
+        shell: pwsh
         run: |
-          %TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent
+          & cmd /c "%TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent 2>&1" | Tee-Object -FilePath "$env:GITHUB_WORKSPACE\prepare.log"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Free up some disk space.
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
+
+      - name: Show log on failure.
+        if: failure()
+        shell: bash
+        run: |
+          for f in prepare.log build.log; do
+            [ -f "$f" ] || continue
+            errs=$(tr -d '\r' < "$f" | grep -E 'error C|error LNK|CMake Error|FAILED|Traceback|Error:|error:' | head -n 30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            [ -n "$errs" ] && echo "::error title=$f errors::$errs"
+            tail_=$(tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | tail -n 40 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::error title=$f tail::$tail_"
+          done
 
   # Шаг 2: изменения из custom/ и сборка Telegram.exe (Release, без автообновления).
   build:
@@ -189,8 +203,10 @@ jobs:
           restore-keys: ${{ runner.OS }}-x64-qt-
 
       - name: Libraries.
+        shell: pwsh
         run: |
-          %TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent
+          & cmd /c "%TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent 2>&1" | Tee-Object -FilePath "$env:GITHUB_WORKSPACE\prepare.log"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Free up some disk space.
         shell: bash
@@ -202,20 +218,14 @@ jobs:
           python %TBUILD%\tdesktop\custom\apply.py
 
       - name: Build.
+        shell: pwsh
         run: |
-          cd %TBUILD%\tdesktop\Telegram
-
-          call configure.bat x64 ^
-          -D TDESKTOP_API_ID=%API_ID% ^
-          -D TDESKTOP_API_HASH=%API_HASH% ^
-          -D CMAKE_CONFIGURATION_TYPES=Release ^
-          -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
-          -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON ^
-          -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
-          if errorlevel 1 exit /b 1
-
-          cmake --build ..\out --config Release --target Telegram --parallel
-          if errorlevel 1 exit /b 1
+          $log = "$env:GITHUB_WORKSPACE\build.log"
+          cd "$env:TBUILD\tdesktop\Telegram"
+          & cmd /c "configure.bat x64 -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON 2>&1" | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & cmd /c "cmake --build ..\out --config Release --target Telegram --parallel 2>&1" | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Collect files.
         run: |
@@ -231,3 +241,15 @@ jobs:
           path: artifact\
           if-no-files-found: error
           retention-days: 30
+
+      - name: Show log on failure.
+        if: failure()
+        shell: bash
+        run: |
+          for f in prepare.log build.log; do
+            [ -f "$f" ] || continue
+            errs=$(tr -d '\r' < "$f" | grep -E 'error C|error LNK|CMake Error|FAILED|Traceback|Error:|error:' | head -n 30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            [ -n "$errs" ] && echo "::error title=$f errors::$errs"
+            tail_=$(tr -d '\r' < "$f" | grep -v '^[[:space:]]*$' | tail -n 40 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::error title=$f tail::$tail_"
+          done
