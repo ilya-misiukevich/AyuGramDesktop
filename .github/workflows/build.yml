@@ -134,7 +134,7 @@ jobs:
       - name: Free up some disk space.
         if: success() || failure()
         shell: bash
-        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
+        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' -o -path '*/gas-preprocessor/*' ')' -type f ')' -o -empty ')' -delete
 
       - name: Save ThirdParty.
         if: (success() || failure()) && steps.built.outputs.changed == 'true'
@@ -282,6 +282,11 @@ jobs:
           $pf = (Get-CimInstance Win32_PageFileUsage | ForEach-Object { "$($_.Name) $($_.AllocatedBaseSize) MB" }) -join ', '
           echo "::notice title=Machine::RAM $mem GB, CPU $($cs.NumberOfLogicalProcessors), $disks, pagefile $pf"
 
+      - name: Put build output on drive D.
+        run: |
+          mkdir D:\tbuild-out
+          mklink /J %userprofile%\TBuild\tdesktop\out D:\tbuild-out
+
       - name: Apply custom changes.
         run: |
           python %TBUILD%\tdesktop\custom\apply.py
@@ -316,6 +321,7 @@ jobs:
         shell: bash
         run: |
           set +eo pipefail
+          echo "::notice title=Disk at failure::$(df -h 2>/dev/null | grep -E '^[CD]:' | awk '{print $1" "$4" free"}' | tr '\n' ',')"
           for f in prepare.log build.log; do
             [ -f "$f" ] || continue
             errs=$(tr -d '\r' < "$f" | grep -aE 'error C|error LNK|fatal error|CMake Error|FAILED|Traceback|Error:|error:|not enough space|No space left|out of memory|heap space' | head -n 30 | cut -c1-400 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
