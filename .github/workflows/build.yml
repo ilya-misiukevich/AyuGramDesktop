@@ -31,7 +31,8 @@ defaults:
 jobs:
 
   # Шаг 1: библиотеки (Qt, ffmpeg, OpenSSL и т.д.). Долго только в первый раз,
-  # дальше берутся из кэша. Отдельная задача, чтобы не упереться в лимит 6 часов.
+  # дальше берутся из кэша. Кэш сохраняется и при ошибке: следующий запуск
+  # продолжит с того места, где остановился.
   libraries:
     name: Libraries
     runs-on: windows-latest
@@ -56,17 +57,15 @@ jobs:
           DOCPATH=$TBUILD/tdesktop/docs/building-win.md
           SDK="$(grep "SDK version" $DOCPATH | sed -r 's/.*\*\*(.*)\*\* SDK version.*/\1/')"
           echo "SDK=$SDK" >> $GITHUB_ENV
-
           echo "$(sha256sum $TBUILD/tdesktop/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
           echo "$SDK" >> CACHE_KEY.txt
           echo "release" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
-
           git config --global user.email "build@localhost"
           git config --global user.name "Build"
 
-      - uses: Eden-CI/msvc-dev-cmd@master
-        name: Native Tools Command Prompt.
+      - name: Native Tools Command Prompt.
+        uses: Eden-CI/msvc-dev-cmd@master
         with:
           arch: x64
           sdk: ${{ env.SDK }}
@@ -77,15 +76,17 @@ jobs:
           nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
           nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
 
-      - name: ThirdParty cache.
-        uses: actions/cache@v6
+      - name: Restore ThirdParty.
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.TBUILD }}\ThirdParty
-          key: ${{ runner.OS }}-third-party-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-third-party-
+          key: win-third-party-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            win-third-party-${{ env.CACHE_KEY }}-
+            win-third-party-
 
-      - name: Libraries cache.
-        uses: actions/cache@v6
+      - name: Restore Libraries.
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ env.LibrariesPath }}\*
@@ -93,17 +94,21 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: ${{ runner.OS }}-x64-libs-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-libs-
+          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            win-x64-libs-${{ env.CACHE_KEY }}-
+            win-x64-libs-
 
-      - name: Qt cache.
-        uses: actions/cache@v6
+      - name: Restore Qt.
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: ${{ runner.OS }}-x64-qt-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-qt-
+          key: win-x64-qt-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            win-x64-qt-${{ env.CACHE_KEY }}-
+            win-x64-qt-
 
       - name: Fix prepare script.
         run: |
@@ -115,15 +120,55 @@ jobs:
           & cmd /c "%TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent 2>&1" | Tee-Object -FilePath "$env:GITHUB_WORKSPACE\prepare.log"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      - name: Check what was built.
+        id: built
+        if: success() || failure()
+        shell: bash
+        run: |
+          if [ -f prepare.log ] && grep -q "BUILDING:" prepare.log; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Free up some disk space.
+        if: success() || failure()
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
+
+      - name: Save ThirdParty.
+        if: (success() || failure()) && steps.built.outputs.changed == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.TBUILD }}\ThirdParty
+          key: win-third-party-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save Libraries.
+        if: (success() || failure()) && steps.built.outputs.changed == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\*
+            !${{ env.LibrariesPath }}\cache_keys
+            !${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\*
+            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save Qt.
+        if: (success() || failure()) && steps.built.outputs.changed == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: win-x64-qt-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Show log on failure.
         if: failure()
         shell: bash
         run: |
-          for f in prepare.log build.log; do
+          for f in prepare.log; do
             [ -f "$f" ] || continue
             errs=$(tr -d '\r' < "$f" | grep -E 'error C|error LNK|CMake Error|FAILED|Traceback|Error:|error:' | head -n 30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
             [ -n "$errs" ] && echo "::error title=$f errors::$errs"
@@ -157,17 +202,15 @@ jobs:
           DOCPATH=$TBUILD/tdesktop/docs/building-win.md
           SDK="$(grep "SDK version" $DOCPATH | sed -r 's/.*\*\*(.*)\*\* SDK version.*/\1/')"
           echo "SDK=$SDK" >> $GITHUB_ENV
-
           echo "$(sha256sum $TBUILD/tdesktop/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
           echo "$SDK" >> CACHE_KEY.txt
           echo "release" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
-
           git config --global user.email "build@localhost"
           git config --global user.name "Build"
 
-      - uses: Eden-CI/msvc-dev-cmd@master
-        name: Native Tools Command Prompt.
+      - name: Native Tools Command Prompt.
+        uses: Eden-CI/msvc-dev-cmd@master
         with:
           arch: x64
           sdk: ${{ env.SDK }}
@@ -178,15 +221,17 @@ jobs:
           nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
           nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
 
-      - name: ThirdParty cache.
-        uses: actions/cache@v6
+      - name: Restore ThirdParty.
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.TBUILD }}\ThirdParty
-          key: ${{ runner.OS }}-third-party-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-third-party-
+          key: win-third-party-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            win-third-party-${{ env.CACHE_KEY }}-
+            win-third-party-
 
-      - name: Libraries cache.
-        uses: actions/cache@v6
+      - name: Restore Libraries.
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ env.LibrariesPath }}\*
@@ -194,17 +239,21 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: ${{ runner.OS }}-x64-libs-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-libs-
+          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            win-x64-libs-${{ env.CACHE_KEY }}-
+            win-x64-libs-
 
-      - name: Qt cache.
-        uses: actions/cache@v6
+      - name: Restore Qt.
+        uses: actions/cache/restore@v6
         with:
           path: |
             ${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: ${{ runner.OS }}-x64-qt-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-qt-
+          key: win-x64-qt-${{ env.CACHE_KEY }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            win-x64-qt-${{ env.CACHE_KEY }}-
+            win-x64-qt-
 
       - name: Fix prepare script.
         run: |
@@ -215,11 +264,6 @@ jobs:
         run: |
           & cmd /c "%TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent 2>&1" | Tee-Object -FilePath "$env:GITHUB_WORKSPACE\prepare.log"
           if ($LASTEXITCODE -ne 0) { exit 1 }
-
-      - name: Free up some disk space.
-        shell: bash
-        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
-
 
       - name: Apply custom changes.
         run: |

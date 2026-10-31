@@ -227,6 +227,24 @@ def fix_prepare():
     else:
         print("  поправка diffutils не нужна")
 
+    # dump_syms (утилита для отчётов о падениях) требует ATL, которого нет
+    # на машинах GitHub. Отчёты о падениях выключены, поэтому она не нужна.
+    text = read(rel)
+    nl = eol(text)
+    pattern = re.compile(
+        r"^\s+(cd tools\\\\windows\\\\dump_syms"
+        r"|gyp dump_syms\.gyp --format=msvs"
+        r"|msbuild -m dump_syms\.vcxproj .*)$"
+    )
+    lines = text.split(nl)
+    kept = [l for l in lines if not pattern.match(l)]
+    removed = len(lines) - len(kept)
+    if removed:
+        write(rel, nl.join(kept))
+        print(f"  убрана сборка dump_syms ({removed} строки)")
+    else:
+        print("  поправка dump_syms не нужна")
+
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["prepare"]:
