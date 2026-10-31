@@ -266,6 +266,22 @@ jobs:
           & cmd /c "%TBUILD%\tdesktop\Telegram\build\prepare\win.bat silent 2>&1" | Tee-Object -FilePath "$env:GITHUB_WORKSPACE\prepare.log"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      - name: Increase page file.
+        uses: al-cheb/configure-pagefile-action@v1.5
+        with:
+          minimum-size: 16GB
+          maximum-size: 32GB
+          disk-root: "D:"
+
+      - name: Machine info.
+        shell: pwsh
+        run: |
+          $cs = Get-CimInstance Win32_ComputerSystem
+          $mem = [math]::Round($cs.TotalPhysicalMemory / 1GB)
+          $disks = (Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free } | ForEach-Object { "$($_.Name): $([math]::Round($_.Free / 1GB)) GB free" }) -join ', '
+          $pf = (Get-CimInstance Win32_PageFileUsage | ForEach-Object { "$($_.Name) $($_.AllocatedBaseSize) MB" }) -join ', '
+          echo "::notice title=Machine::RAM $mem GB, CPU $($cs.NumberOfLogicalProcessors), $disks, pagefile $pf"
+
       - name: Apply custom changes.
         run: |
           python %TBUILD%\tdesktop\custom\apply.py
