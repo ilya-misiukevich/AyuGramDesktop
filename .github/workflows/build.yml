@@ -105,6 +105,10 @@ jobs:
           key: ${{ runner.OS }}-x64-qt-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-x64-qt-
 
+      - name: Fix prepare script.
+        run: |
+          python %TBUILD%\tdesktop\custom\apply.py prepare
+
       - name: Libraries.
         shell: pwsh
         run: |
@@ -201,6 +205,10 @@ jobs:
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
           key: ${{ runner.OS }}-x64-qt-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-x64-qt-
+
+      - name: Fix prepare script.
+        run: |
+          python %TBUILD%\tdesktop\custom\apply.py prepare
 
       - name: Libraries.
         shell: pwsh

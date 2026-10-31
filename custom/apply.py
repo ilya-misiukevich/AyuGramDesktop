@@ -12,6 +12,7 @@
 и завершается с ошибкой, чтобы сборка не прошла с неполными изменениями.
 
 Запуск: python custom/apply.py  (из корня репозитория или откуда угодно)
+        python custom/apply.py prepare  — только обходы для сборки библиотек
 """
 
 import re
@@ -211,7 +212,26 @@ def apply_names():
     )
 
 
+# ---------------------------------------- обходы для сборки библиотек
+
+def fix_prepare():
+    """Поправки скрипта подготовки библиотек. Не меняют программу.
+    Если AyuGram уже исправил место у себя, поправка просто пропускается."""
+    print("Подготовка библиотек:")
+    rel = "Telegram/build/prepare/prepare.py"
+    text = read(rel)
+    # MSYS2 убрал пакет mingw-w64-x86_64-diffutils, есть только diffutils
+    if "mingw-w64-x86_64-diffutils" in text:
+        write(rel, text.replace("mingw-w64-x86_64-diffutils", "diffutils"))
+        print("  mingw-w64-x86_64-diffutils -> diffutils")
+    else:
+        print("  поправка diffutils не нужна")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["prepare"]:
+        fix_prepare()
+        sys.exit(0)
     apply_icons()
     if not errors:
         apply_names()
