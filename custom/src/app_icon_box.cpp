@@ -106,7 +106,7 @@ struct IconGroup {
 			{ u"human"_q, u"Human"_q, {}, {}, u"cIick_cIack"_q },
 			{ u"sunset"_q, u"Sunset"_q, u"Закат"_q, u"Here comes the sun"_q },
 			{ u"amethyst"_q, u"Amethyst"_q, u"Аметист"_q, u"Perfectly balanced"_q },
-			{ u"aurora"_q, u"Aurora"_q, u"Аврора"_q, u"Localized entirely in your phone"_q },
+			{ u"aurora"_q, u"Aurora"_q, u"Аврора"_q, u"Localized entirely within your taskbar"_q },
 			{ u"osu"_q, u"osu!"_q, {}, {}, u"ataeshi"_q },
 			{ u"google"_q, u"Google"_q, {}, u"Don’t be evil"_q },
 			{ u"google26"_q, u"Google ’26"_q, {}, {}, u"Slucket"_q },
