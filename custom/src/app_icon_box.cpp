@@ -28,6 +28,7 @@
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
+#include "ui/widgets/scroll_area.h"
 #include "ui/wrap/fade_wrap.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
@@ -815,7 +816,8 @@ class AppIconSection final : public Section<AppIconSection> {
 public:
 	AppIconSection(
 		QWidget *parent,
-		not_null<Window::SessionController*> controller);
+		not_null<Window::SessionController*> controller,
+		not_null<Ui::ScrollArea*> scroll);
 
 	[[nodiscard]] rpl::producer<QString> title() override;
 
@@ -835,6 +837,7 @@ private:
 		not_null<AppIconTopBar*> bar);
 	void setupTabs(not_null<QWidget*> parent);
 
+	const not_null<Ui::ScrollArea*> _scroll;
 	const std::shared_ptr<PageState> _state;
 	base::unique_qptr<Ui::FadeWrap<Ui::IconButton>> _back;
 	base::unique_qptr<Ui::IconButton> _close;
@@ -849,8 +852,10 @@ private:
 
 AppIconSection::AppIconSection(
 	QWidget *parent,
-	not_null<Window::SessionController*> controller)
+	not_null<Window::SessionController*> controller,
+	not_null<Ui::ScrollArea*> scroll)
 : Section(parent, controller)
+, _scroll(scroll)
 , _state(std::make_shared<PageState>()) {
 	const auto current = CurrentIcon();
 	_state->selected = current;
@@ -1084,6 +1089,17 @@ void AppIconSection::setupTabs(not_null<QWidget*> parent) {
 		_state->tab = id.toInt();
 	}, tabs->lifetime());
 
+	// WHY: the strip floats over the list instead of living inside it,
+	// so a wheel it doesn't need would never reach the scroll; forward it
+	// like info_settings_widget.cpp does for the pinned top bar.
+	tabs->events(
+	) | rpl::filter([=](not_null<QEvent*> e) {
+		return (e->type() == QEvent::Wheel)
+			&& (tabs->width() >= tabs->naturalWidth());
+	}) | rpl::on_next([=](not_null<QEvent*> e) {
+		_scroll->viewportEvent(e);
+	}, tabs->lifetime());
+
 	const auto outer = dynamic_cast<Ui::RpWidget*>(parent.get());
 	if (!outer) {
 		return;
@@ -1105,7 +1121,7 @@ object_ptr<AbstractSection> SectionFactory<AppIconSection>::create(
 		not_null<Window::SessionController*> controller,
 		not_null<Ui::ScrollArea*> scroll,
 		rpl::producer<Container> containerValue) const {
-	return object_ptr<AppIconSection>(parent, controller);
+	return object_ptr<AppIconSection>(parent, controller, scroll);
 }
 
 Type AppIconId() {
