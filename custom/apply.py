@@ -351,8 +351,7 @@ def apply_original_look():
             "\t\t};\n"
             "\t});\n", "")
 
-    print("Ссылки и донат AyuGram в настройках — убрать:")
-    replace(src + "ayu/ui/settings/settings_main.cpp", "\tBuildLinks(builder);\n", "")
+    print("Донат AyuGram в настройках — убрать (блок «Ссылки» оставляем):")
     replace(src + "ayu/ui/settings/settings_other.cpp", "\tBuildDonations(builder);\n", "")
 
     print("Превью в настройках — от своего аккаунта:")
