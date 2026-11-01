@@ -1,19 +1,19 @@
 #pragma once
 
 #include "base/object_ptr.h"
+#include "settings/settings_type.h"
 
 namespace Ui {
 class RpWidget;
 class VerticalLayout;
-class GenericBox;
 } // namespace Ui
 
-namespace Window {
-class SessionController;
-} // namespace Window
+namespace Settings {
 
-void AppIconBox(not_null<Ui::GenericBox*> box);
+[[nodiscard]] Type AppIconId();
+
+} // namespace Settings
 
 [[nodiscard]] object_ptr<Ui::RpWidget> CreateAppIconButton(
 	not_null<Ui::VerticalLayout*> container,
-	not_null<Window::SessionController*> controller);
+	Fn<void(Settings::Type)> showOther);

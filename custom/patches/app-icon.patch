@@ -1,5 +1,5 @@
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index a957cfd5c4195731e908eaa1612997e873b1ccb9..223b24d808a1a0666a9c92c7d59b497cdf9eb578 100644
+index a957cfd5c4195731e908eaa1612997e873b1ccb9..90767e3e5c8c0880319cbd374311542472d207cd 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
 @@ -183,6 +183,8 @@ set(ayugram_files
@@ -33,7 +33,7 @@ index 2711b7c1b012e115b99521b58460f111d7c5aeb8..aad3ab71c13f3e4a0984d60d018da267
  }
  
 diff --git a/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp b/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp
-index ce1366210e3a1f06a104804815a39e3a422ee828..92d108f984e88a44c4daf7257d3e51c22f1138fd 100644
+index ce1366210e3a1f06a104804815a39e3a422ee828..e44a75941f5975b495d9f6a112b5a8b42179fd4e 100644
 --- a/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp
 +++ b/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp
 @@ -18,16 +18,21 @@ static QImage LAST_LOADED_PAD;
@@ -70,6 +70,15 @@ index ce1366210e3a1f06a104804815a39e3a422ee828..92d108f984e88a44c4daf7257d3e51c2
  }
  
  QImage CreateImage(const QString &name, const QSize resultImageSize, const int padding = 0) {
+@@ -44,7 +49,7 @@ QImage CreateImage(const QString &name, const QSize resultImageSize, const int p
+ 
+ 	const auto pngPath = qsl(":/gui/art/ayu/%1/app.png").arg(name);
+ 	if (QFile::exists(pngPath)) {
+-		const auto loaded = QImage(pngPath).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
++		const auto loaded = QImage(pngPath).scaled(iconSize * style::DevicePixelRatio(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+ 		auto res = QImage(
+ 			resultImageSize * style::DevicePixelRatio(),
+ 			QImage::Format_ARGB32_Premultiplied);
 @@ -92,11 +97,11 @@ QImage CreateImage(const QString &name, const QSize resultImageSize, const int p
  }
  
@@ -88,7 +97,7 @@ index ce1366210e3a1f06a104804815a39e3a422ee828..92d108f984e88a44c4daf7257d3e51c2
  }
  
 diff --git a/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp b/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp
-index 98e492a804e11675c5d07cfd2eee0afdba01e9dd..35cc9973d1ed4c433af446fb65e050cd4b70ca3a 100644
+index 98e492a804e11675c5d07cfd2eee0afdba01e9dd..060c585526cca6f8a0fe5bc8fd0af9f4c6feef91 100644
 --- a/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp
 +++ b/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp
 @@ -11,7 +11,7 @@
@@ -105,10 +114,10 @@ index 98e492a804e11675c5d07cfd2eee0afdba01e9dd..35cc9973d1ed4c433af446fb65e050cd
  
  void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 -	builder.addSubsectionTitle({
-+	const auto controller = builder.controller();
++	const auto showOther = builder.showOther();
 +	builder.addControl({
 +		.factory = [=](not_null<Ui::VerticalLayout*> container) {
-+			return CreateAppIconButton(container, controller);
++			return CreateAppIconButton(container, showOther);
 +		},
  		.id = u"ayu/appIcon"_q,
  		.title = tr::ayu_AppIconHeader(),
