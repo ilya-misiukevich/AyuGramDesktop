@@ -1,0 +1,15 @@
+diff --git a/Telegram/SourceFiles/lang/lang_instance.h b/Telegram/SourceFiles/lang/lang_instance.h
+index 0dff008e3f740bb5608f71976f5c1a98dfba671a..63b69fc7ab3c0e0bd4345a76670b6273c24717da 100644
+--- a/Telegram/SourceFiles/lang/lang_instance.h
++++ b/Telegram/SourceFiles/lang/lang_instance.h
+@@ -90,7 +90,9 @@ public:
+ 	QString getValue(ushort key) const {
+ 		Expects(key < _values.size());
+ 
+-		return _values[key];
++		return QString(_values[key]).replace(
++			QLatin1String("AyuGram"),
++			QLatin1String("Telegram"));
+ 	}
+ 	QString getNonDefaultValue(const QByteArray &key) const;
+ 	bool isNonDefaultPlural(ushort key) const {

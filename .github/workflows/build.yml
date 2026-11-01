@@ -111,8 +111,12 @@ jobs:
             win-x64-qt-
 
       - name: Fix prepare script.
+        shell: bash
         run: |
-          python %TBUILD%\tdesktop\custom\apply.py prepare
+          cd "$TBUILD/tdesktop"
+          git apply --index custom/prepare.patch && exit 0
+          git fetch --unshallow --quiet
+          git apply --index --3way custom/prepare.patch
 
       - name: Libraries.
         shell: pwsh
@@ -257,8 +261,12 @@ jobs:
             win-x64-qt-
 
       - name: Fix prepare script.
+        shell: bash
         run: |
-          python %TBUILD%\tdesktop\custom\apply.py prepare
+          cd "$TBUILD/tdesktop"
+          git apply --index custom/prepare.patch && exit 0
+          git fetch --unshallow --quiet
+          git apply --index --3way custom/prepare.patch
 
       - name: Libraries.
         shell: pwsh
@@ -288,8 +296,56 @@ jobs:
           mklink /J %userprofile%\TBuild\tdesktop\out D:\tbuild-out
 
       - name: Apply custom changes.
+        shell: bash
         run: |
-          python %TBUILD%\tdesktop\custom\apply.py
+          set -e
+          cd "$TBUILD/tdesktop"
+
+          for p in custom/patches/*.patch; do
+            echo "Patch: $p"
+            if ! git apply --index "$p"; then
+              if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+                git fetch --unshallow --quiet
+              fi
+              git apply --index --3way "$p"
+            fi
+          done
+
+          for d in custom/icons/*/; do
+            n=$(basename "$d")
+            if [ -e "Telegram/Resources/art/ayu/$n" ]; then
+              echo "::error::art/ayu/$n already exists in AyuGram, rename custom/icons/$n"
+              exit 1
+            fi
+          done
+          for f in custom/brand/art/*; do
+            if [ ! -e "Telegram/Resources/art/$(basename "$f")" ]; then
+              echo "::error::art/$(basename "$f") is missing in AyuGram"
+              exit 1
+            fi
+          done
+
+          cp -r custom/icons/. Telegram/Resources/art/ayu/
+          cp custom/brand/art/* Telegram/Resources/art/
+          cp custom/icons/monet_extera_tg_light/app_icon.ico Telegram/Resources/art/icon256.ico
+          cp custom/src/app_icon_box.* Telegram/SourceFiles/ayu/ui/boxes/
+
+          qrc=Telegram/Resources/qrc/ayu/custom.qrc
+          {
+            echo '<RCC>'
+            echo '    <qresource prefix="/gui">'
+            for d in custom/icons/*/; do
+              n=$(basename "$d")
+              for f in app.png app.svg app_icon.ico; do
+                if [ -f "$d$f" ]; then
+                  echo "        <file alias=\"art/ayu/$n/$f\">../../art/ayu/$n/$f</file>"
+                fi
+              done
+            done
+            echo '    </qresource>'
+            echo '</RCC>'
+          } > "$qrc"
+          echo "Icons: $(grep -c app_icon.ico "$qrc")"
 
       - name: Build.
         shell: pwsh

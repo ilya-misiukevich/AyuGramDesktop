@@ -1,0 +1,344 @@
+diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
+index a957cfd5c4195731e908eaa1612997e873b1ccb9..223b24d808a1a0666a9c92c7d59b497cdf9eb578 100644
+--- a/Telegram/CMakeLists.txt
++++ b/Telegram/CMakeLists.txt
+@@ -2571,7 +2574,7 @@ else()
+         set(bundle_identifier "one.ayugram.AyuGramDesktop")
+     endif()
+     set(bundle_entitlements "Telegram.entitlements")
+-    set(output_name "AyuGram")
++    set(output_name "Telegram")
+ endif()
+ 
+ if (CMAKE_GENERATOR STREQUAL Xcode)
+@@ -2620,7 +2623,7 @@ get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+ if (APPLE
+     OR is_multi_config
+     OR NOT CMAKE_EXECUTABLE_SUFFIX STREQUAL ""
+-    OR NOT "${output_name}" STREQUAL "AyuGram")
++    OR NOT "${output_name}" STREQUAL "Telegram")
+     set(output_folder ${CMAKE_BINARY_DIR})
+ else()
+     set(output_folder ${CMAKE_BINARY_DIR}/bin)
+diff --git a/Telegram/Resources/winrc/Telegram.rc b/Telegram/Resources/winrc/Telegram.rc
+index 07c4d93db3bd1f3b626ba75c48814d1e07b49b62..14bb8a8f4874c349631ee99420829441d89f84ad 100644
+--- a/Telegram/Resources/winrc/Telegram.rc
++++ b/Telegram/Resources/winrc/Telegram.rc
+@@ -60,11 +60,11 @@ BEGIN
+     BEGIN
+         BLOCK "040904b0"
+         BEGIN
+-            VALUE "CompanyName", "Radolyn Labs"
+-            VALUE "FileDescription", "AyuGram Desktop"
++            VALUE "CompanyName", "Telegram FZ-LLC"
++            VALUE "FileDescription", "Telegram Desktop"
+             VALUE "FileVersion", "7.2.9.0"
+             VALUE "LegalCopyright", "Copyright (C) 2014-2026"
+-            VALUE "ProductName", "AyuGram Desktop"
++            VALUE "ProductName", "Telegram Desktop"
+             VALUE "ProductVersion", "7.2.9.0"
+         END
+     END
+diff --git a/Telegram/SourceFiles/ayu/features/filters/filters_utils.cpp b/Telegram/SourceFiles/ayu/features/filters/filters_utils.cpp
+index 9e43d9eda874b6647e80923ddc404412c4e3bcdd..d818151ae5abba18c86c6a2d5d0a71842869d1d5 100644
+--- a/Telegram/SourceFiles/ayu/features/filters/filters_utils.cpp
++++ b/Telegram/SourceFiles/ayu/features/filters/filters_utils.cpp
+@@ -357,7 +357,7 @@ void FilterUtils::publishFilters() {
+ 
+ 	QHttpPart titlePart;
+ 	titlePart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"title\""));
+-	titlePart.setBody("AyuGram Filters");
++	titlePart.setBody("Telegram Filters");
+ 
+ 	multiPart->append(contentPart);
+ 	multiPart->append(syntaxPart);
+diff --git a/Telegram/SourceFiles/ayu/ui/settings/settings_ayu.cpp b/Telegram/SourceFiles/ayu/ui/settings/settings_ayu.cpp
+index 657677d61f3fb24b8c8c9016267ad4405846c497..8c4ac2acbe3c360353d4cdd9d37a273fcb420156 100644
+--- a/Telegram/SourceFiles/ayu/ui/settings/settings_ayu.cpp
++++ b/Telegram/SourceFiles/ayu/ui/settings/settings_ayu.cpp
+@@ -681,7 +681,7 @@ void BuildOther(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+ const auto kMeta = BuildHelper({
+ 	.id = AyuGhost::Id(),
+ 	.parentId = AyuMain::Id(),
+-	.title = u"AyuGram"_q,
++	.title = u"Telegram"_q,
+ 	.icon = &st::menuIconGroupReactions,
+ }, [](SectionBuilder &builder) {
+ 	auto ayu = AyuSectionBuilder(builder);
+@@ -700,7 +700,7 @@ const auto kMeta = BuildHelper({
+ } // namespace
+ 
+ rpl::producer<QString> AyuGhost::title() {
+-	return rpl::single(QString("AyuGram"));
++	return rpl::single(QString("Telegram"));
+ }
+ 
+ AyuGhost::AyuGhost(
+diff --git a/Telegram/SourceFiles/ayu/utils/windows_utils.cpp b/Telegram/SourceFiles/ayu/utils/windows_utils.cpp
+index a3db974819bb68bd3afdbc6769257d340fbec2d6..a009348dc1b69dc5ebcf78a71d3d8afe6ca27559 100644
+--- a/Telegram/SourceFiles/ayu/utils/windows_utils.cpp
++++ b/Telegram/SourceFiles/ayu/utils/windows_utils.cpp
+@@ -47,9 +47,9 @@ void processIcon(QString shortcut, QString iconPath) {
+ 
+ void processLegacy(const QString &iconPath) {
+ 	const auto appdata = QDir::fromNativeSeparators(qgetenv("APPDATA"));
+-	auto shortcut = appdata + "/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/AyuGram Desktop.lnk";
++	auto shortcut = appdata + "/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/Telegram Desktop.lnk";
+ 	if (!QFile::exists(shortcut)) {
+-		shortcut = appdata + "/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/AyuGram.lnk";
++		shortcut = appdata + "/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/Telegram.lnk";
+ 	}
+ 	if (!QFile::exists(shortcut)) {
+ 		return;
+@@ -140,9 +140,9 @@ void processNewShortcuts(const QString &iconPath) {
+ 	}
+ 
+ 	const auto shortcuts = {
+-		path + u"AyuGram Desktop/AyuGram.lnk"_q,
+-		path + u"AyuGram/AyuGram.lnk"_q,
+-		path + u"AyuGram.lnk"_q,
++		path + u"Telegram Desktop/Telegram.lnk"_q,
++		path + u"Telegram/Telegram.lnk"_q,
++		path + u"Telegram.lnk"_q,
+ 	};
+ 	for (const auto &shortcut : shortcuts) {
+ 		const auto native = QDir::toNativeSeparators(shortcut).toStdWString();
+diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
+index 6178f5d9b6dc8a17de1a0fbeeb9e83450462c9f4..4f690f41d46484b800e3c08ef39249dfe52dda83 100644
+--- a/Telegram/SourceFiles/core/application.cpp
++++ b/Telegram/SourceFiles/core/application.cpp
+@@ -1277,7 +1277,7 @@ bool Application::openInternalUrl(const QString &url, QVariant context) {
+ }
+ 
+ QString Application::changelogLink() const {
+-	return u"https://github.com/AyuGram/AyuGramDesktop/releases"_q;
++	return u"https://desktop.telegram.org/changelog"_q;
+ }
+ 
+ bool Application::openCustomUrl(
+diff --git a/Telegram/SourceFiles/core/crash_report_window.cpp b/Telegram/SourceFiles/core/crash_report_window.cpp
+index 12298a116e9c26a016cd5eae7eea34b4083ec193..5fbed1259d89e813d21f2c51c35a3ed97c022b1f 100644
+--- a/Telegram/SourceFiles/core/crash_report_window.cpp
++++ b/Telegram/SourceFiles/core/crash_report_window.cpp
+@@ -44,7 +44,7 @@ PreLaunchWindow::PreLaunchWindow(QString title) {
+ 	setWindowIcon(Window::CreateIcon());
+ 	setWindowFlags(Qt::Dialog | Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint);
+ 
+-	setWindowTitle(title.isEmpty() ? u"AyuGram"_q : title);
++	setWindowTitle(title.isEmpty() ? u"Telegram"_q : title);
+ 
+ 	QPalette p(palette());
+ 	p.setColor(QPalette::Window, QColor(255, 255, 255));
+@@ -249,7 +249,7 @@ NotStartedWindow::NotStartedWindow()
+ : _label(this)
+ , _log(this)
+ , _close(this) {
+-	_label.setText(u"Could not start AyuGram Desktop!\nYou can see complete log below:"_q);
++	_label.setText(u"Could not start Telegram Desktop!\nYou can see complete log below:"_q);
+ 
+ 	_log.setPlainText(Logs::full());
+ 
+@@ -399,9 +399,9 @@ LastCrashedWindow::LastCrashedWindow(
+ 		[=] { networkSettings(); });
+ 
+ 	if (_sendingState == SendingNoReport) {
+-		_label.setText(u"Last time AyuGram Desktop was not closed properly."_q);
++		_label.setText(u"Last time Telegram Desktop was not closed properly."_q);
+ 	} else {
+-		_label.setText(u"Last time AyuGram Desktop crashed :("_q);
++		_label.setText(u"Last time Telegram Desktop crashed :("_q);
+ 	}
+ 
+ 	if (_updaterData) {
+@@ -497,7 +497,7 @@ LastCrashedWindow::LastCrashedWindow(
+ 	connect(&_saveReport, &QPushButton::clicked, [=] { saveReport(); });
+ 	_getApp.setText(u"GET THE LATEST VERSION OF AYUGRAM DESKTOP"_q);
+ 	connect(&_getApp, &QPushButton::clicked, [=] {
+-		QDesktopServices::openUrl(u"https://github.com/AyuGram/AyuGramDesktop"_q);
++		QDesktopServices::openUrl(u"https://github.com/telegramdesktop/tdesktop/issues"_q);
+ 	});
+ 
+ 	_send.setText(u"SEND CRASH REPORT"_q);
+@@ -515,7 +515,7 @@ LastCrashedWindow::LastCrashedWindow(
+ }
+ 
+ void LastCrashedWindow::saveReport() {
+-	QString to = QFileDialog::getSaveFileName(0, u"AyuGram Crash Report"_q, QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + u"/report.telegramcrash"_q, u"Telegram crash report (*.telegramcrash)"_q);
++	QString to = QFileDialog::getSaveFileName(0, u"Telegram Crash Report"_q, QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + u"/report.telegramcrash"_q, u"Telegram crash report (*.telegramcrash)"_q);
+ 	if (!to.isEmpty()) {
+ 		QFile file(to);
+ 		if (file.open(QIODevice::WriteOnly)) {
+@@ -894,7 +894,7 @@ void LastCrashedWindow::updateControls() {
+ 		h += _networkSettings.height() + padding;
+ 	}
+ 
+-	QSize s(2 * padding + QFontMetrics(_label.font()).horizontalAdvance(u"Last time AyuGram Desktop was not closed properly."_q) + padding + _networkSettings.width(), h);
++	QSize s(2 * padding + QFontMetrics(_label.font()).horizontalAdvance(u"Last time Telegram Desktop was not closed properly."_q) + padding + _networkSettings.width(), h);
+ 	if (s == size()) {
+ 		resizeEvent(0);
+ 	} else {
+diff --git a/Telegram/SourceFiles/core/version.h b/Telegram/SourceFiles/core/version.h
+index 3503dbe6b73413b6f12d26707a7c28d7060e3c4f..908399329278287d6e224b78e9d30bd0e0e9b1ec 100644
+--- a/Telegram/SourceFiles/core/version.h
++++ b/Telegram/SourceFiles/core/version.h
+@@ -20,8 +20,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ // used in Updater.cpp and Setup.iss for Windows
+ constexpr auto AppId = "{53F49750-6209-4FBF-9CA8-7A333C87D666}"_cs;
+ constexpr auto AppNameOld = "AyuGram for Windows"_cs;
+-constexpr auto AppName = "AyuGram Desktop"_cs;
+-constexpr auto AppFile = "AyuGram"_cs;
++constexpr auto AppName = "Telegram Desktop"_cs;
++constexpr auto AppFile = "Telegram"_cs;
+ constexpr auto AppVersion = 7002009;
+ constexpr auto AppVersionStr = "7.2.9";
+ constexpr auto AppBetaVersion = false;
+diff --git a/Telegram/SourceFiles/export/output/export_output_html.cpp b/Telegram/SourceFiles/export/output/export_output_html.cpp
+index 37c59e8a6cb995acfe3d2f3f846bfe5a505191f5..b06ad26e738866e1bd393847c7117afb89734c67 100644
+--- a/Telegram/SourceFiles/export/output/export_output_html.cpp
++++ b/Telegram/SourceFiles/export/output/export_output_html.cpp
+@@ -3922,7 +3922,7 @@ auto HtmlWriter::Wrap::pushMessage(
+ 			dialog,
+ 			basePath,
+ 			"This message is not supported by this version "
+-			"of AyuGram Desktop. Please update the application.") };
++			"of Telegram Desktop. Please update the application.") };
+ 	}
+ 
+ 	const auto wrapReplyToLink = [&](const QByteArray &text) {
+diff --git a/Telegram/SourceFiles/history/history_item_helpers.cpp b/Telegram/SourceFiles/history/history_item_helpers.cpp
+index 199d6dc4663d27b87a358a7f4e131841d5c9357b..06a0c25f762c9e5c796f54d0a2b6e9316cef3779 100644
+--- a/Telegram/SourceFiles/history/history_item_helpers.cpp
++++ b/Telegram/SourceFiles/history/history_item_helpers.cpp
+@@ -1460,7 +1460,7 @@ bool CanHoldItemNotification(not_null<const HistoryItem*> item) {
+ [[nodiscard]] TextWithEntities UnsupportedMessageText() {
+ 	const auto siteLink = u"https://t.me/AyuGramReleases"_q;
+ 	auto result = TextWithEntities{
+-		tr::lng_message_unsupported(tr::now, lt_link, siteLink).replace("Telegram", "AyuGram")
++		tr::lng_message_unsupported(tr::now, lt_link, siteLink)
+ 	};
+ 	TextUtilities::ParseEntities(result, Ui::ItemTextNoMonoOptions().flags);
+ 	result.entities.push_front(
+diff --git a/Telegram/SourceFiles/platform/win/specific_win.cpp b/Telegram/SourceFiles/platform/win/specific_win.cpp
+index 50808c45b94bd03100fc576d26abbee18c07386f..a309b6f6be9fac33de778e3a36776540a8f08ed9 100644
+--- a/Telegram/SourceFiles/platform/win/specific_win.cpp
++++ b/Telegram/SourceFiles/platform/win/specific_win.cpp
+@@ -328,10 +328,10 @@ void psDoFixPrevious() {
+ 		HRESULT userDesktopRes = SHGetFolderPath(0, CSIDL_DESKTOPDIRECTORY, 0, SHGFP_TYPE_CURRENT, userDesktopFolder);
+ 		HRESULT commonDesktopRes = SHGetFolderPath(0, CSIDL_COMMON_DESKTOPDIRECTORY, 0, SHGFP_TYPE_CURRENT, commonDesktopFolder);
+ 		if (SUCCEEDED(userDesktopRes)) {
+-			userDesktopLnk = QString::fromWCharArray(userDesktopFolder) + "\\AyuGram.lnk";
++			userDesktopLnk = QString::fromWCharArray(userDesktopFolder) + "\\Telegram.lnk";
+ 		}
+ 		if (SUCCEEDED(commonDesktopRes)) {
+-			commonDesktopLnk = QString::fromWCharArray(commonDesktopFolder) + "\\AyuGram.lnk";
++			commonDesktopLnk = QString::fromWCharArray(commonDesktopFolder) + "\\Telegram.lnk";
+ 		}
+ 		QFile userDesktopFile(userDesktopLnk), commonDesktopFile(commonDesktopLnk);
+ 		if (QFile::exists(userDesktopLnk) && QFile::exists(commonDesktopLnk) && userDesktopLnk != commonDesktopLnk) {
+diff --git a/Telegram/SourceFiles/platform/win/windows_app_user_model_id.cpp b/Telegram/SourceFiles/platform/win/windows_app_user_model_id.cpp
+index 59b1f01b97d8ce2ec16f801449db83b25c85c39e..425cc7724b3f87cce484235d67ace4a4667e34b1 100644
+--- a/Telegram/SourceFiles/platform/win/windows_app_user_model_id.cpp
++++ b/Telegram/SourceFiles/platform/win/windows_app_user_model_id.cpp
+@@ -213,7 +213,7 @@ void CleanupShortcut() {
+ 		return;
+ 	}
+ 
+-	QString path = systemShortcutPath() + u"AyuGram.lnk"_q;
++	QString path = systemShortcutPath() + u"Telegram.lnk"_q;
+ 	std::wstring p = QDir::toNativeSeparators(path).toStdWString();
+ 
+ 	DWORD attributes = GetFileAttributes(p.c_str());
+@@ -345,7 +345,7 @@ bool checkInstalled(QString path = {}) {
+ 		}
+ 	}
+ 
+-	const auto installed = u"AyuGram Desktop/AyuGram.lnk"_q;
++	const auto installed = u"Telegram Desktop/Telegram.lnk"_q;
+ 	const auto old = u"AyuGram for Windows/AyuGram.lnk"_q;
+ 	return validateShortcutAt(path + installed)
+ 		|| validateShortcutAt(path + old);
+@@ -367,7 +367,7 @@ bool ValidateShortcut() {
+ 			return true;
+ 		}
+ 
+-		path += u"AyuGram.lnk"_q;
++		path += u"Telegram.lnk"_q;
+ 		if (validateShortcutAt(path)) {
+ 			return true;
+ 		}
+diff --git a/Telegram/SourceFiles/settings/sections/settings_notifications.cpp b/Telegram/SourceFiles/settings/sections/settings_notifications.cpp
+index f31a5154276ec4a0db7e9efc8f30a4a663c276ea..d68e2ece06b2cd200e588d994192e1b3c4545678 100644
+--- a/Telegram/SourceFiles/settings/sections/settings_notifications.cpp
++++ b/Telegram/SourceFiles/settings/sections/settings_notifications.cpp
+@@ -517,7 +517,7 @@ void NotificationsCount::prepareNotificationSampleLarge() {
+ 		p.setPen(st::dialogsNameFg);
+ 		p.setFont(st::msgNameFont);
+ 
+-		auto notifyTitle = st::msgNameFont->elided(u"AyuGram Desktop"_q, rectForName.width());
++		auto notifyTitle = st::msgNameFont->elided(u"Telegram Desktop"_q, rectForName.width());
+ 		p.drawText(rectForName.left(), rectForName.top() + st::msgNameFont->ascent, notifyTitle);
+ 
+ 		st::notifyClose.icon.paint(p, w - st::notifyClosePos.x() - st::notifyClose.width + st::notifyClose.iconPosition.x(), st::notifyClosePos.y() + st::notifyClose.iconPosition.y(), w);
+diff --git a/Telegram/SourceFiles/tray.cpp b/Telegram/SourceFiles/tray.cpp
+index 3ea2e08f65244e4387c87b353be1f32a5bc58ac4..e7a42f6d719cdefed2b1f9796281c16dcf4ad073 100644
+--- a/Telegram/SourceFiles/tray.cpp
++++ b/Telegram/SourceFiles/tray.cpp
+@@ -85,7 +85,7 @@ void Tray::rebuildMenu() {
+ 			_activeForTrayIconAction = Core::App().isActiveForTrayMenu();
+ 			return _activeForTrayIconAction
+ 				? tr::lng_minimize_to_tray(tr::now)
+-				: tr::lng_open_from_tray(tr::now).replace("Telegram", "AyuGram");
++				: tr::lng_open_from_tray(tr::now);
+ 		});
+ 
+ 		_tray.addAction(
+@@ -153,7 +153,7 @@ void Tray::rebuildMenu() {
+ 	auto quitText = _textUpdates.events(
+ 	) | rpl::map([=]
+ 	{
+-		return tr::lng_quit_from_tray(tr::now).replace("Telegram", "AyuGram");
++		return tr::lng_quit_from_tray(tr::now);
+ 	});
+ 	_tray.addAction(std::move(quitText), [] { Core::Quit(); });
+ 
+diff --git a/Telegram/SourceFiles/window/main_window.cpp b/Telegram/SourceFiles/window/main_window.cpp
+index 999c2b79b16cabbea443a98f1a7dc15015bde6a2..e2ab34c75530cd93f88098c48c07a05353191e0a 100644
+--- a/Telegram/SourceFiles/window/main_window.cpp
++++ b/Telegram/SourceFiles/window/main_window.cpp
+@@ -921,7 +921,7 @@ void MainWindow::updateTitle() {
+ 		: Dialogs::Key();
+ 	const auto thread = key ? key.thread() : nullptr;
+ 	if (!thread) {
+-		setTitle((user.isEmpty() ? u"AyuGram"_q : user) + added + suffix);
++		setTitle((user.isEmpty() ? u"Telegram"_q : user) + added + suffix);
+ 		return;
+ 	}
+ 	const auto history = thread->owningHistory();
+diff --git a/Telegram/SourceFiles/window/notifications_manager_default.cpp b/Telegram/SourceFiles/window/notifications_manager_default.cpp
+index b1e68877bced9d2d429f380e432c5abdb00ddd08..5e5491b9855bd44507e59ef2e88327a942eea254 100644
+--- a/Telegram/SourceFiles/window/notifications_manager_default.cpp
++++ b/Telegram/SourceFiles/window/notifications_manager_default.cpp
+@@ -1025,7 +1025,7 @@ void Notification::updateNotifyDisplay() {
+ 				: TextWithEntities{ name };
+ 		};
+ 		auto title = options.hideNameAndPhoto
+-			? TextWithEntities{ u"AyuGram Desktop"_q }
++			? TextWithEntities{ u"Telegram Desktop"_q }
+ 			: reminder
+ 			? tr::lng_notification_reminder(tr::now, tr::marked)
+ 			: topicWithChat();
+diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
+index 642947ac40c33359c0d199e9d0f8902b56927ba7..3e267a92eb94af228cd91de451c54e8aa24ccb8b 100644
+--- a/Telegram/SourceFiles/window/window_main_menu.cpp
++++ b/Telegram/SourceFiles/window/window_main_menu.cpp
+@@ -392,8 +392,8 @@ MainMenu::MainMenu(
+ 	parentResized();
+ 
+ 	_telegram->setMarkedText(tr::link(
+-		u"AyuGram Desktop"_q,
+-		u"https://ayugram.one"_q));
++		u"Telegram Desktop"_q,
++		u"https://desktop.telegram.org"_q));
+ 	_telegram->setLinksTrusted();
+ 	// The canary version is too long for the "Version {version}" form.
+ 	_version->setMarkedText(

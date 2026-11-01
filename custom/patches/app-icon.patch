@@ -1,0 +1,138 @@
+diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
+index a957cfd5c4195731e908eaa1612997e873b1ccb9..223b24d808a1a0666a9c92c7d59b497cdf9eb578 100644
+--- a/Telegram/CMakeLists.txt
++++ b/Telegram/CMakeLists.txt
+@@ -183,6 +183,8 @@ set(ayugram_files
+         ayu/ui/boxes/edit_mark_box.h
+         ayu/ui/boxes/font_selector.cpp
+         ayu/ui/boxes/font_selector.h
++        ayu/ui/boxes/app_icon_box.cpp
++        ayu/ui/boxes/app_icon_box.h
+         ayu/ui/boxes/import_filters_box.cpp
+         ayu/ui/boxes/import_filters_box.h
+         ayu/ui/boxes/theme_selector_box.cpp
+@@ -2380,6 +2382,7 @@ endif()
+ nice_target_sources(Telegram ${res_loc}
+ PRIVATE
+     qrc/ayu/ayu.qrc
++    qrc/ayu/custom.qrc
+ 
+     qrc/emoji_1.qrc
+     qrc/emoji_2.qrc
+diff --git a/Telegram/SourceFiles/ayu/ayu_settings.cpp b/Telegram/SourceFiles/ayu/ayu_settings.cpp
+index 2711b7c1b012e115b99521b58460f111d7c5aeb8..aad3ab71c13f3e4a0984d60d018da267f7d5fdc6 100644
+--- a/Telegram/SourceFiles/ayu/ayu_settings.cpp
++++ b/Telegram/SourceFiles/ayu/ayu_settings.cpp
+@@ -355,7 +355,7 @@ void from_json(const nlohmann::json &j, MessageShotSettings &s) {
+ }
+ 
+ AyuSettings::AyuSettings()
+-: _appIcon(AyuAssets::DEFAULT_ICON)
++: _appIcon(u"monet_extera_tg_light"_q)
+ , _editedMark(Core::IsAppLaunched() ? tr::lng_edited(tr::now) : QString("edited")) {
+ }
+ 
+diff --git a/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp b/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp
+index ce1366210e3a1f06a104804815a39e3a422ee828..92d108f984e88a44c4daf7257d3e51c22f1138fd 100644
+--- a/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp
++++ b/Telegram/SourceFiles/ayu/ui/ayu_logo.cpp
+@@ -18,16 +18,21 @@ static QImage LAST_LOADED_PAD;
+ 
+ namespace AyuAssets {
+ 
++QString ResolvedIconName() {
++	const auto &name = AyuSettings::getInstance().appIcon();
++	return QFile::exists(u":/gui/art/ayu/%1/app_icon.ico"_q.arg(name))
++		? name
++		: u"monet_extera_tg_light"_q;
++}
++
+ QString appIcoPath() {
+-	const auto &settings = AyuSettings::getInstance();
+ 	return cWorkingDir()
+ 		+ u"tdata/AyuGram-"_q
+-		+ settings.appIcon()
++		+ ResolvedIconName()
+ 		+ u".ico"_q;
+ }
+ 
+ void loadAppIco() {
+-	const auto &settings = AyuSettings::getInstance();
+ 	const auto iconPath = appIcoPath();
+ 
+ 	auto f = QFile(iconPath);
+@@ -36,7 +41,7 @@ void loadAppIco() {
+ 		f.remove();
+ 	}
+ 	f.close();
+-	QFile::copy(qsl(":/gui/art/ayu/%1/app_icon.ico").arg(settings.appIcon()), iconPath);
++	QFile::copy(qsl(":/gui/art/ayu/%1/app_icon.ico").arg(ResolvedIconName()), iconPath);
+ }
+ 
+ QImage CreateImage(const QString &name, const QSize resultImageSize, const int padding = 0) {
+@@ -92,11 +97,11 @@ QImage CreateImage(const QString &name, const QSize resultImageSize, const int p
+ }
+ 
+ void loadIcons() {
+-	const auto &settings = AyuSettings::getInstance();
+-	if (LAST_LOADED_NAME != settings.appIcon()) {
+-		LAST_LOADED_NAME = settings.appIcon();
+-		LAST_LOADED = CreateImage(settings.appIcon(), Size(256));
+-		LAST_LOADED_PAD = CreateImage(settings.appIcon(), Size(256), 12);
++	const auto name = ResolvedIconName();
++	if (LAST_LOADED_NAME != name) {
++		LAST_LOADED_NAME = name;
++		LAST_LOADED = CreateImage(name, Size(256));
++		LAST_LOADED_PAD = CreateImage(name, Size(256), 12);
+ 	}
+ }
+ 
+diff --git a/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp b/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp
+index 98e492a804e11675c5d07cfd2eee0afdba01e9dd..35cc9973d1ed4c433af446fb65e050cd4b70ca3a 100644
+--- a/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp
++++ b/Telegram/SourceFiles/ayu/ui/settings/settings_appearance.cpp
+@@ -11,7 +11,7 @@
+ #include "ayu/ayu_ui_settings.h"
+ #include "ayu/ui/boxes/font_selector.h"
+ #include "ayu/ui/components/avatar_corners_preview.h"
+-#include "ayu/ui/components/icon_picker.h"
++#include "ayu/ui/boxes/app_icon_box.h"
+ #include "ayu/ui/settings/ayu_builder.h"
+ #include "ayu/ui/settings/settings_ayu_utils.h"
+ #include "ayu/ui/settings/settings_main.h"
+@@ -51,18 +51,15 @@ bool HasDrawerBots(not_null<Window::SessionController*> controller) {
+ }
+ 
+ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+-	builder.addSubsectionTitle({
++	const auto controller = builder.controller();
++	builder.addControl({
++		.factory = [=](not_null<Ui::VerticalLayout*> container) {
++			return CreateAppIconButton(container, controller);
++		},
+ 		.id = u"ayu/appIcon"_q,
+ 		.title = tr::ayu_AppIconHeader(),
+ 	});
+ 
+-	builder.add([](const WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {
+-		return {
+-			.widget = object_ptr<IconPicker>(ctx.container),
+-			.margin = st::settingsButtonNoIcon.padding,
+-		};
+-	});
+-
+ #if defined Q_OS_WIN || defined Q_OS_MAC
+ 	builder.addDivider();
+ 	builder.addSkip();
+diff --git a/Telegram/cmake/td_ui.cmake b/Telegram/cmake/td_ui.cmake
+index e2a23f15c895eed836d4b19a66a112d001acb4e3..404b9856ae75800804f67aa8e2179ff92e35f283 100644
+--- a/Telegram/cmake/td_ui.cmake
++++ b/Telegram/cmake/td_ui.cmake
+@@ -14,6 +14,7 @@ include(cmake/generate_numbers.cmake)
+ set(ayugram_style_files
+         ayu/ui/ayu_icons.style
+         ayu/ui/ayu_styles.style
++        ayu/ui/boxes/app_icon_box.style
+         ayu/ui/settings/ayu_settings.style
+ )
+ 

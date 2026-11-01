@@ -1,0 +1,215 @@
+diff --git a/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp b/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp
+index 6783c21a3d70ddbd9347c9be19196ba77f2b8adf..bbd92fa01076fb10901e9449744a0dfd5e9c5616 100644
+--- a/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp
++++ b/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp
+@@ -10,6 +10,7 @@
+ #include "data/data_peer.h"
+ #include "data/data_peer_id.h"
+ #include "data/data_session.h"
++#include "data/data_user.h"
+ #include "main/main_session.h"
+ #include "styles/style_ayu_icons.h"
+ #include "styles/style_dialogs.h"
+@@ -63,14 +64,11 @@ void AvatarCornersPreview::paintEvent(QPaintEvent *e) {
+ 		_emptyUserpic.paintCircle(p, userpicX, userpicY, width(), photoSize);
+ 	}
+ 
+-	const auto nameText = u"AyuGram Releases"_q;
++	const auto nameText = _peer ? _peer->name() : QString();
+ 	p.setPen(st::dialogsNameFg);
+ 	p.setFont(st::semiboldFont);
+ 	p.drawText(row.nameLeft + xShift, row.nameTop + st::semiboldFont->ascent, nameText);
+ 
+-	const auto nameWidth = st::semiboldFont->width(nameText);
+-	const auto &badge = st::dialogsExteraOfficialIcon.icon;
+-	badge.paint(p, row.nameLeft + xShift + nameWidth, row.nameTop, width());
+ 
+ 	p.setPen(st::dialogsTextFg);
+ 	p.setFont(st::dialogsTextFont);
+@@ -95,15 +93,12 @@ void AvatarCornersPreview::mouseReleaseEvent(QMouseEvent *e) {
+ 		_ripple->lastStop();
+ 	}
+ 	if (e->button() == Qt::LeftButton && rect().contains(e->pos())) {
+-		_controller->showPeerByLink(Window::PeerByLinkInfo{
+-			.usernameOrId = u"AyuGramReleases"_q,
+-		});
+ 	}
+ }
+ 
+ void AvatarCornersPreview::resolveChannel() {
+ 	const auto session = &_controller->session();
+-	_peer = session->data().peerByUsername(u"AyuGramReleases"_q);
++	_peer = session->user().get();
+ 	if (_peer) {
+ 		_peer->loadUserpic();
+ 		subscribeToUpdates();
+diff --git a/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp b/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp
+index 79d9de000f080fd87995efd898966ba2cba58e06..ad21aa66db43a09980b317e62ac96d8fd9c55b93 100644
+--- a/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp
++++ b/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp
+@@ -9,6 +9,7 @@
+ #include "ayu/ayu_settings.h"
+ #include "base/unixtime.h"
+ #include "data/data_session.h"
++#include "data/data_user.h"
+ #include "history/history.h"
+ #include "history/history_item.h"
+ #include "history/history_item_components.h"
+@@ -75,7 +76,7 @@ MessagePreview::MessagePreview(
+ 
+ 	const auto ayugramUser = HistoryView::GenerateUser(
+ 		history,
+-		u"AyuGram Releases"_q);
++		history->session().user()->name());
+ 	const auto messageItem = history->addNewLocalMessage({
+ 		.id = history->nextNonHistoryEntryId(),
+ 		.flags = (MessageFlag::FakeHistoryItem
+diff --git a/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp b/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp
+index a4b1e7ad414afc3e214fd954027e2df337668af4..acb24bfa3497eeb43c06431f3e28be65e702d803 100644
+--- a/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp
++++ b/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp
+@@ -70,24 +70,13 @@ void BuildVersionInfo(SectionBuilder &builder) {
+ 			.widget = object_ptr<Ui::FlatLabel>(
+ 				ctx.container,
+ 				rpl::single(
+-					QString("AyuGram Desktop v")
++					QString("Telegram Desktop v")
+ 					+ QString::fromLatin1(AppVersionStr)),
+ 				st::boxTitle),
+ 			.align = style::al_top,
+ 		};
+ 	});
+ 
+-	builder.addSkip();
+-
+-	builder.add([](const WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {
+-		return {
+-			.widget = object_ptr<Ui::FlatLabel>(
+-				ctx.container,
+-				tr::ayu_SettingsDescription(),
+-				st::centeredBoxLabel),
+-			.align = style::al_top,
+-		};
+-	});
+ }
+ 
+ void BuildCategories(SectionBuilder &builder) {
+@@ -101,7 +90,7 @@ void BuildCategories(SectionBuilder &builder) {
+ 	builder.addSubsectionTitle(tr::ayu_CategoriesHeader());
+ 
+ 	builder.addSectionButton({
+-		.title = rpl::single(QString("AyuGram")),
++		.title = rpl::single(QString("Telegram")),
+ 		.targetSection = AyuGhost::Id(),
+ 		.icon = { &st::menuIconGroupReactions },
+ 	});
+diff --git a/Telegram/SourceFiles/ayu/ui/settings/settings_other.cpp b/Telegram/SourceFiles/ayu/ui/settings/settings_other.cpp
+index 929cf4609b032bbf104dc3ef28ea6dc72deb37f8..2de2c2308b64a959a33f0dcb517de81a8cdcb3e7 100644
+--- a/Telegram/SourceFiles/ayu/ui/settings/settings_other.cpp
++++ b/Telegram/SourceFiles/ayu/ui/settings/settings_other.cpp
+@@ -234,7 +234,6 @@ const auto kMeta = BuildHelper({
+ 	auto ayu = AyuSectionBuilder(builder);
+ 
+ 	builder.addSkip();
+-	BuildDonations(builder);
+ 	BuildCrashReporting(builder, ayu);
+ 	BuildOtherThings(builder);
+ });
+diff --git a/Telegram/SourceFiles/ayu/utils/telegram_helpers.cpp b/Telegram/SourceFiles/ayu/utils/telegram_helpers.cpp
+index 5d80efc030848d84fd2de6a58c9453d7e84fe808..a5c4e66283313802b944927f17ebe1fe07b85a73 100644
+--- a/Telegram/SourceFiles/ayu/utils/telegram_helpers.cpp
++++ b/Telegram/SourceFiles/ayu/utils/telegram_helpers.cpp
+@@ -176,16 +176,19 @@ ID getBareID(not_null<PeerData*> peer) {
+ }
+ 
+ bool isExteraPeer(ID peerId) {
++	return false;
+ 	return RCManager::getInstance().developers().contains(peerId) || RCManager::getInstance().channels().
+ 		contains(peerId);
+ }
+ 
+ bool isSupporterPeer(ID peerId) {
++	return false;
+ 	return RCManager::getInstance().supporters().contains(peerId) || RCManager::getInstance().supporterChannels().
+ 		contains(peerId);
+ }
+ 
+ bool isCustomBadgePeer(ID peerId) {
++	return false;
+ 	return RCManager::getInstance().supporterCustomBadges().contains(peerId);
+ }
+ 
+diff --git a/Telegram/SourceFiles/boxes/about_box.cpp b/Telegram/SourceFiles/boxes/about_box.cpp
+index 31c31395a1daf5f1aa51f4b80c987a822cb8ff07..f90874fb978f1b9d655c1eff5ee0b7b4d57ba6f4 100644
+--- a/Telegram/SourceFiles/boxes/about_box.cpp
++++ b/Telegram/SourceFiles/boxes/about_box.cpp
+@@ -45,18 +45,18 @@ rpl::producer<TextWithEntities> Text() {
+ 		lt_gpl_link,
+ 		rpl::single(Ui::Text::Link(
+ 			"GNU GPL",
+-			"https://github.com/AyuGram/AyuGramDesktop/blob/dev/LICENSE")),
++			"https://github.com/telegramdesktop/tdesktop/blob/master/LICENSE")),
+ 		lt_github_link,
+ 		rpl::single(Ui::Text::Link(
+ 			"GitHub",
+-			"https://github.com/AyuGram/AyuGramDesktop")),
++			"https://github.com/telegramdesktop/tdesktop")),
+ 		tr::marked);
+ }
+ 
+ } // namespace
+ 
+ void AboutBox(not_null<Ui::GenericBox*> box, Window::SessionController* controller) {
+-	box->setTitle(rpl::single(u"AyuGram Desktop"_q));
++	box->setTitle(rpl::single(u"Telegram Desktop"_q));
+ 
+ 	auto layout = box->verticalLayout();
+ 
+@@ -90,15 +90,6 @@ void AboutBox(not_null<Ui::GenericBox*> box, Window::SessionController* controll
+ 	addText(Text());
+ 
+ 	box->addButton(tr::lng_close(), [=] { box->closeBox(); });
+-	box->addLeftButton(
+-		rpl::single(QString("@AyuGramReleases")),
+-		[box, controller]
+-		{
+-			box->closeBox();
+-			controller->showPeerByLink(Window::PeerByLinkInfo{
+-				.usernameOrId = QString("ayugramreleases"),
+-			});
+-		});
+ 
+ 	box->setWidth(st::aboutWidth);
+ }
+diff --git a/Telegram/SourceFiles/intro/intro_step.cpp b/Telegram/SourceFiles/intro/intro_step.cpp
+index c1b3d03809e0a4a0ebe3dd19735669e76d0195b3..a7f3cbb6788d570084f917ecd5985fcde73e0ad1 100644
+--- a/Telegram/SourceFiles/intro/intro_step.cpp
++++ b/Telegram/SourceFiles/intro/intro_step.cpp
+@@ -479,8 +479,12 @@ void Step::paintCover(QPainter &p, int top) {
+ 	st::introCoverRight.paint(p, width() - right - st::introCoverRight.width(), coverHeight - st::introCoverRight.height(), width());
+ 
+ 	auto planeTop = top + st::introCoverIconTop;
+-	const auto ayuGramIcon = Ui::PixmapFromImage(AyuAssets::currentAppLogo());
+-	QIcon(ayuGramIcon).paint(&p, QRect(width() / 2 - ayuGramIcon.width() / 2, planeTop - 16, ayuGramIcon.width(), st::introCoverIcon.height()));
++	auto planeLeft = (width() - st::introCoverIcon.width()) / 2 - st::introCoverIconLeft;
++	if (top < 0 && !_hasCover) {
++		const auto ratio = float64(st::introPlaneWidth / st::introPlaneHeight);
++		planeLeft += -int(base::SafeRound(ratio * top));
++	}
++	st::introCoverIcon.paint(p, planeLeft, planeTop, width());
+ }
+ 
+ int Step::contentLeft() const {
+diff --git a/Telegram/SourceFiles/intro/intro_widget.cpp b/Telegram/SourceFiles/intro/intro_widget.cpp
+index 767978450c1ac2eee023e8ecc83c049290b6e391..caef928feeb4159b254da4368b31b93887ac0b68 100644
+--- a/Telegram/SourceFiles/intro/intro_widget.cpp
++++ b/Telegram/SourceFiles/intro/intro_widget.cpp
+@@ -179,7 +179,7 @@ Widget::Widget(
+ 		}, lifetime());
+ 	}
+ 
+-	_footer->setText(QString("AyuGram Desktop v%1").arg(currentVersionText()));
++	_footer->hide();
+ }
+ 
+ rpl::producer<> Widget::showSettingsRequested() const {

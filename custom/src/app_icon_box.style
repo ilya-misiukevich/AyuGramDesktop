@@ -1,0 +1,39 @@
+using "ui/basic.style";
+using "ui/colors.palette";
+using "ui/widgets/widgets.style";
+using "ui/layers/layers.style";
+using "settings/settings.style";
+
+appIconBoxMaxHeight: 664px;
+appIconBoxPreviewTop: 10px;
+appIconBoxPreviewSize: 88px;
+appIconBoxNamePadding: margins(24px, 12px, 24px, 0px);
+appIconBoxName: FlatLabel(defaultFlatLabel) {
+	textFg: boxTitleFg;
+	align: align(top);
+	minWidth: 32px;
+	style: TextStyle(defaultTextStyle) {
+		font: boxTitleFont;
+	}
+}
+appIconBoxSubtitlePadding: margins(24px, 6px, 24px, 14px);
+appIconBoxSubtitleHeight: 18px;
+appIconBoxSubtitle: FlatLabel(defaultFlatLabel) {
+	textFg: windowSubTextFg;
+	align: align(top);
+	minWidth: 32px;
+}
+appIconBoxGridPadding: margins(12px, 0px, 12px, 0px);
+appIconBoxCaptionSkip: 4px;
+appIconBoxRowSkip: 8px;
+appIconBoxGroupSkip: 12px;
+
+appIconSettingsButton: SettingsButton(settingsButton) {
+	padding: margins(60px, 10px, 64px, 30px);
+}
+appIconSettingsSubtitle: FlatLabel(defaultFlatLabel) {
+	textFg: windowSubTextFg;
+}
+appIconSettingsSubtitleTop: 31px;
+appIconSettingsPreviewSize: 34px;
+appIconSettingsPreviewRight: 22px;

@@ -1,0 +1,23 @@
+diff --git a/Telegram/build/prepare/prepare.py b/Telegram/build/prepare/prepare.py
+index c71d29390a0e9e01885605fdfb0a8c8f7f3dd49c..f9744299c73c205844febf21f13ff05949cb74f7 100644
+--- a/Telegram/build/prepare/prepare.py
++++ b/Telegram/build/prepare/prepare.py
+@@ -478,7 +478,7 @@ win:
+     bash -c "pacman-key --init; pacman-key --populate; pacman -Syu --noconfirm"
+     pacman -Syu --noconfirm ^
+         make ^
+-        mingw-w64-x86_64-diffutils ^
++        diffutils ^
+         mingw-w64-x86_64-gperf ^
+         mingw-w64-x86_64-nasm ^
+         mingw-w64-x86_64-perl ^
+@@ -1451,9 +1451,6 @@ depends:python/Scripts/activate.bat
+     ninja -C out/Debug%FolderPostfix% common crash_generation_client exception_handler
+ release:
+     ninja -C out/Release%FolderPostfix% common crash_generation_client exception_handler
+-    cd tools\\windows\\dump_syms
+-    gyp dump_syms.gyp --format=msvs
+-    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64" %ToolsetProp%
+ win:
+     deactivate
+ mac:
