@@ -35,6 +35,8 @@ BRAND_ART = ROOT / "custom" / "brand" / "art"
 FIRST_ICONS = ["telegram"]
 # Иконка по умолчанию (имя папки в custom/icons).
 DEFAULT_ICON = "telegram"
+# Иконка самого Telegram.exe в проводнике (имя папки в custom/icons).
+EXE_ICON = "monet_extera_tg_light"
 
 errors = []
 
@@ -256,6 +258,12 @@ def apply_original_look():
             continue
         shutil.copyfile(p, ART / p.name)
     print(f"  заменено файлов в art/: {len(files)}")
+    exe_ico = ICONS_SRC / EXE_ICON / "app_icon.ico"
+    if not exe_ico.exists():
+        errors.append(f"custom/icons/{EXE_ICON}/app_icon.ico: нет файла для иконки exe")
+    else:
+        shutil.copyfile(exe_ico, ART / "icon256.ico")
+        print(f"  иконка exe: {EXE_ICON}")
 
     print("Иконка по умолчанию:")
     replace(src + "ayu/ayu_settings.cpp",
