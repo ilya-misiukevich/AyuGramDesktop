@@ -21,6 +21,7 @@
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 #include "ui/color_contrast.h"
+#include "ui/effects/animation_value.h"
 #include "ui/effects/animations.h"
 #include "ui/painter.h"
 #include "ui/text/text_utilities.h"
@@ -40,6 +41,8 @@
 #endif
 
 #include <QSvgRenderer>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QScrollBar>
 
 namespace Settings {
 namespace {
@@ -51,6 +54,7 @@ constexpr auto kMinColumns = 3;
 constexpr auto kMaxColumns = 8;
 constexpr auto kAccentSize = 24; // AppIcons.accent samples a 24x24 bitmap
 constexpr auto kTintDuration = crl::time(280);
+constexpr auto kScrollStepTime = crl::time(260);
 constexpr auto kTextCollapsePart = 0.35;
 constexpr auto kGlowRadius = 0.9;
 constexpr auto kMinAcceptableContrast = 4.5; // as in premium_top_bar.cpp
@@ -622,170 +626,99 @@ void IconsGrid::mouseReleaseEvent(QMouseEvent *e) {
 	}
 }
 
-class AppIconTopBar final : public Ui::RpWidget {
-public:
-	AppIconTopBar(QWidget *parent, std::shared_ptr<PageState> state);
+[[nodiscard]] int HeaderHeight() {
+	return st::infoLayerTopBarHeight;
+}
 
-	void setRoundEdges(bool value);
-
-	[[nodiscard]] QPointF glowCenter() const;
-	[[nodiscard]] float64 glowRadius() const;
-
-protected:
-	void paintEvent(QPaintEvent *e) override;
-	void resizeEvent(QResizeEvent *e) override;
-
-private:
-	void paintEdges(QPainter &p, const QBrush &brush) const;
-	void updateLabels();
-	[[nodiscard]] int previewTop() const;
-
-	const std::shared_ptr<PageState> _state;
-	object_ptr<Ui::FlatLabel> _name;
-	object_ptr<Ui::FlatLabel> _subtitle;
-	QImage _preview;
-	bool _roundEdges = false;
-
-};
-
-AppIconTopBar::AppIconTopBar(
-	QWidget *parent,
-	std::shared_ptr<PageState> state)
-: RpWidget(parent)
-, _state(std::move(state))
-, _name(
-	this,
-	_state->selected.value() | rpl::map(IconName),
-	st::appIconPageName)
-, _subtitle(
-	this,
-	_state->selected.value() | rpl::map(IconSubtitle),
-	st::appIconPageSubtitle) {
-	const auto header = st::infoLayerTopBarHeight;
-	setMinimumHeight(header);
-	setMaximumHeight(header
-		+ st::appIconPagePreviewTop
+[[nodiscard]] int HeroBodyHeight() {
+	return st::appIconPagePreviewTop
 		+ st::appIconPagePreviewSize
 		+ st::appIconPageNameSkip
 		+ st::appIconPageNameHeight
 		+ st::appIconPageSubtitleSkip
 		+ st::appIconPageSubtitleHeight
-		+ st::appIconPageHeroBottom);
+		+ st::appIconPageHeroBottom;
+}
 
-	_state->selected.value() | rpl::on_next([=](const QString &id) {
-		_preview = LoadIconImage(id, st::appIconPagePreviewSize);
-		update();
-	}, lifetime());
+[[nodiscard]] float64 GlowCenterY() {
+	return HeaderHeight()
+		+ st::appIconPagePreviewTop
+		+ st::appIconPagePreviewSize / 2.;
+}
+
+[[nodiscard]] float64 GlowRadius(int width) {
+	return std::max(width, HeaderHeight() + HeroBodyHeight()) * kGlowRadius;
+}
+
+void PaintHero(
+		QPainter &p,
+		const PageState &state,
+		const QPainterPath &area,
+		int width,
+		int top) {
+	p.fillPath(area, BaseColor(state));
+	const auto collapse = state.collapse.current();
+	if (state.tint && collapse < 1.) {
+		p.setOpacity(1. - collapse);
+		p.fillPath(area, GlowBrush(
+			*state.tint,
+			QPointF(width / 2., GlowCenterY() - top),
+			GlowRadius(width)));
+		p.setOpacity(1.);
+	}
+}
+
+class AppIconHeader final : public Ui::RpWidget {
+public:
+	AppIconHeader(QWidget *parent, std::shared_ptr<PageState> state);
+
+	void setRoundEdges(bool value);
+
+protected:
+	void paintEvent(QPaintEvent *e) override;
+
+private:
+	const std::shared_ptr<PageState> _state;
+	bool _roundEdges = false;
+
+};
+
+AppIconHeader::AppIconHeader(
+	QWidget *parent,
+	std::shared_ptr<PageState> state)
+: RpWidget(parent)
+, _state(std::move(state)) {
+	setMinimumHeight(HeaderHeight());
+	setMaximumHeight(HeaderHeight());
+	resize(width(), HeaderHeight());
 
 	rpl::merge(
-		_name->heightValue() | rpl::to_empty,
-		_subtitle->heightValue() | rpl::to_empty
+		_state->repaints.events(),
+		_state->collapse.changes() | rpl::to_empty
 	) | rpl::on_next([=] {
-		updateLabels();
-	}, lifetime());
-
-	_state->repaints.events() | rpl::on_next([=] {
 		update();
 	}, lifetime());
 }
 
-void AppIconTopBar::setRoundEdges(bool value) {
+void AppIconHeader::setRoundEdges(bool value) {
 	_roundEdges = value;
 	update();
 }
 
-int AppIconTopBar::previewTop() const {
-	return st::infoLayerTopBarHeight + st::appIconPagePreviewTop;
-}
-
-QPointF AppIconTopBar::glowCenter() const {
-	return QPointF(
-		width() / 2.,
-		previewTop() + st::appIconPagePreviewSize / 2.);
-}
-
-float64 AppIconTopBar::glowRadius() const {
-	return std::max(width(), maximumHeight()) * kGlowRadius;
-}
-
-void AppIconTopBar::resizeEvent(QResizeEvent *e) {
-	const auto max = maximumHeight();
-	const auto min = minimumHeight();
-	const auto progress = (max > min)
-		? ((e->size().height() - min) / float64(max - min))
-		: 1.;
-	_state->collapse = 1. - std::clamp(progress, 0., 1.);
-	updateLabels();
-	RpWidget::resizeEvent(e);
-}
-
-void AppIconTopBar::updateLabels() {
-	if (width() <= 0) {
-		return;
-	}
-	const auto text = TextProgress(_state->collapse.current());
-	const auto shift = int(std::round(-st::appIconPageTextShift * text));
-	const auto padding = st::appIconPageTextPadding;
-	const auto available = std::max(width() - 2 * padding, 1);
-	const auto nameTop = previewTop()
-		+ st::appIconPagePreviewSize
-		+ st::appIconPageNameSkip;
-	const auto subtitleTop = nameTop
-		+ st::appIconPageNameHeight
-		+ st::appIconPageSubtitleSkip;
-	const auto place = [&](
-			not_null<Ui::FlatLabel*> label,
-			int top,
-			int height) {
-		label->resizeToWidth(available);
-		label->moveToLeft(
-			padding,
-			top + (height - label->height()) / 2 + shift);
-		label->setOpacity(1. - text);
-		label->setVisible(text < 1.);
-	};
-	place(_name.data(), nameTop, st::appIconPageNameHeight);
-	place(_subtitle.data(), subtitleTop, st::appIconPageSubtitleHeight);
-}
-
-void AppIconTopBar::paintEdges(QPainter &p, const QBrush &brush) const {
-	const auto r = rect();
+void AppIconHeader::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	auto hq = PainterHighQualityEnabler(p);
+	auto area = QPainterPath();
 	if (_roundEdges) {
-		PainterHighQualityEnabler hq(p);
 		const auto radius = st::boxRadius;
-		p.setPen(Qt::NoPen);
-		p.setBrush(brush);
-		p.drawRoundedRect(
-			r + QMargins{ 0, 0, 0, radius + 1 },
+		area.addRoundedRect(
+			QRectF(rect() + QMargins{ 0, 0, 0, radius + 1 }),
 			radius,
 			radius);
 	} else {
-		p.fillRect(r, brush);
+		area.addRect(QRectF(rect()));
 	}
-}
-
-void AppIconTopBar::paintEvent(QPaintEvent *e) {
-	auto p = QPainter(this);
-	const auto collapse = _state->collapse.current();
-	paintEdges(p, BaseColor(*_state));
-	if (_state->tint && collapse < 1.) {
-		p.setOpacity(1. - collapse);
-		paintEdges(p, GlowBrush(*_state->tint, glowCenter(), glowRadius()));
-		p.setOpacity(1.);
-	}
-	if (_preview.isNull()) {
-		return;
-	}
-	auto hq = PainterHighQualityEnabler(p);
-	const auto full = float64(st::appIconPagePreviewSize);
-	const auto size = full
-		+ (st::appIconPagePreviewCollapsed - full) * collapse;
-	const auto from = glowCenter().y();
-	const auto to = minimumHeight() / 2.;
-	const auto center = QPointF(width() / 2., from + (to - from) * collapse);
-	p.drawImage(
-		QRectF(center.x() - size / 2., center.y() - size / 2., size, size),
-		_preview);
+	PaintHero(p, *_state, area, width(), y());
 }
 
 class AppIconSection;
@@ -830,20 +763,29 @@ public:
 
 	[[nodiscard]] rpl::producer<> sectionShowBack() override final;
 
+protected:
+	void paintEvent(QPaintEvent *e) override;
+
 private:
 	void setupContent();
-	void setupEdge(
+	void setupScroll();
+	void setupLabels();
+	void setupEdge();
+	void setupHero(
 		not_null<QWidget*> parent,
-		not_null<AppIconTopBar*> bar);
+		not_null<AppIconHeader*> header);
 	void setupTabs(not_null<QWidget*> parent);
+	[[nodiscard]] const style::color &panelBg() const;
 
 	const not_null<Ui::ScrollArea*> _scroll;
 	const std::shared_ptr<PageState> _state;
 	base::unique_qptr<Ui::FadeWrap<Ui::IconButton>> _back;
 	base::unique_qptr<Ui::IconButton> _close;
 	base::unique_qptr<Ui::FlatLabel> _title;
-	base::unique_qptr<Ui::RpWidget> _edge;
+	base::unique_qptr<Ui::RpWidget> _heroBack;
+	base::unique_qptr<Ui::RpWidget> _heroPreview;
 	base::unique_qptr<Info::Profile::TabsStrip> _tabs;
+	rpl::variable<int> _scrollTop;
 	rpl::variable<bool> _backToggles;
 	rpl::variable<Info::Wrap> _wrap;
 	rpl::event_stream<> _showBack;
@@ -877,6 +819,9 @@ AppIconSection::AppIconSection(
 	}, lifetime());
 
 	setupContent();
+	setupScroll();
+	setupLabels();
+	setupEdge();
 }
 
 rpl::producer<QString> AppIconSection::title() {
@@ -901,9 +846,23 @@ void AppIconSection::setStepDataReference(std::any &data) {
 	}
 }
 
+const style::color &AppIconSection::panelBg() const {
+	return (_wrap.current() == Info::Wrap::Layer)
+		? st::boxBg
+		: st::profileBg;
+}
+
+void AppIconSection::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	const auto top = HeroBodyHeight();
+	p.fillRect(
+		QRect(0, top, width(), height() - top).intersected(e->rect()),
+		panelBg());
+}
+
 void AppIconSection::setupContent() {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	Ui::AddSkip(content, st::appIconPageGridTop);
+	Ui::AddSkip(content, HeroBodyHeight() + st::appIconPageGridTop);
 	const auto &groups = Groups();
 	for (auto i = 0, count = int(groups.size()); i != count; ++i) {
 		const auto wrap = content->add(
@@ -920,11 +879,173 @@ void AppIconSection::setupContent() {
 	}
 	Ui::AddSkip(content, st::appIconPageGridBottom);
 	Ui::ResizeFitChild(this, content);
+
+	_wrap.changes() | rpl::on_next([=] {
+		update();
+	}, lifetime());
+}
+
+void AppIconSection::setupScroll() {
+	_scrollTop = _scroll->scrollTopValue();
+	_scrollTop.value() | rpl::on_next([=](int top) {
+		_state->fade = std::min(
+			1.,
+			top / float64(st::appIconPageFadeDistance));
+		_state->collapse = std::clamp(top / float64(HeroBodyHeight()), 0., 1.);
+	}, lifetime());
+
+	struct WheelState {
+		Ui::Animations::Basic animation;
+		int fromTop = 0;
+		int targetTop = 0;
+		crl::time startTime = 0;
+	};
+	const auto scroll = _scroll;
+	const auto wheel = scroll->lifetime().make_state<WheelState>();
+	const auto single = scroll->verticalScrollBar()->singleStep()
+		* QApplication::wheelScrollLines();
+	// WHY: a wheel notch jumps a whole step at once; the profile animates
+	// it in info_flexible_scroll.cpp, copied here without its cover-specific
+	// snap steps so the collapse follows the scroll as smoothly as a finger.
+	wheel->animation.init([=](crl::time now) {
+		const auto progress = std::clamp(
+			(now - wheel->startTime) / float64(kScrollStepTime),
+			0.,
+			1.);
+		scroll->scrollToY(anim::interpolate(
+			wheel->fromTop,
+			wheel->targetTop,
+			anim::easeOutQuint(1., progress)));
+		if (progress >= 1.) {
+			wheel->animation.stop();
+		}
+	});
+	scroll->setCustomWheelProcess([=](not_null<QWheelEvent*> e) {
+		const auto delta = e->angleDelta().y();
+		if (std::abs(delta) != 120 || e->phase() != Qt::NoScrollPhase) {
+			wheel->animation.stop();
+			return false;
+		}
+		const auto base = wheel->animation.animating()
+			? wheel->targetTop
+			: scroll->scrollTop();
+		const auto diff = (delta > 0) ? -single : single;
+		wheel->targetTop = std::clamp(base + diff, 0, scroll->scrollTopMax());
+		wheel->fromTop = scroll->scrollTop();
+		wheel->startTime = crl::now();
+		if (!wheel->animation.animating()) {
+			wheel->animation.start();
+		}
+		return true;
+	});
+}
+
+void AppIconSection::setupLabels() {
+	const auto labels = Ui::CreateChild<Ui::RpWidget>(this);
+	const auto name = Ui::CreateChild<Ui::FlatLabel>(
+		labels,
+		_state->selected.value() | rpl::map(IconName),
+		st::appIconPageName);
+	const auto subtitle = Ui::CreateChild<Ui::FlatLabel>(
+		labels,
+		_state->selected.value() | rpl::map(IconSubtitle),
+		st::appIconPageSubtitle);
+
+	rpl::combine(
+		_scrollTop.value(),
+		widthValue(),
+		name->heightValue(),
+		subtitle->heightValue()
+	) | rpl::on_next([=](int top, int width, int, int) {
+		const auto visible = std::max(HeroBodyHeight() - top, 0);
+		labels->setGeometry(0, top, width, visible);
+		labels->setVisible(visible > 0);
+
+		const auto text = TextProgress(_state->collapse.current());
+		const auto shift = int(std::round(-st::appIconPageTextShift * text));
+		const auto padding = st::appIconPageTextPadding;
+		const auto available = std::max(width - 2 * padding, 1);
+		const auto nameTop = st::appIconPagePreviewTop
+			+ st::appIconPagePreviewSize
+			+ st::appIconPageNameSkip;
+		const auto subtitleTop = nameTop
+			+ st::appIconPageNameHeight
+			+ st::appIconPageSubtitleSkip;
+		const auto place = [&](
+				not_null<Ui::FlatLabel*> label,
+				int labelTop,
+				int height) {
+			if (label->width() != available) {
+				label->resizeToWidth(available);
+			}
+			label->moveToLeft(
+				padding,
+				labelTop + (height - label->height()) / 2 + shift);
+			label->setOpacity(1. - text);
+			label->setVisible(text < 1.);
+		};
+		place(name, nameTop, st::appIconPageNameHeight);
+		place(subtitle, subtitleTop, st::appIconPageSubtitleHeight);
+	}, labels->lifetime());
+}
+
+void AppIconSection::setupEdge() {
+	const auto edge = Ui::CreateChild<Ui::RpWidget>(this);
+	edge->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+	rpl::combine(
+		_scrollTop.value(),
+		widthValue()
+	) | rpl::on_next([=](int top, int width) {
+		edge->setGeometry(
+			0,
+			std::max(HeroBodyHeight(), top),
+			width,
+			std::max(st::appIconPagePanelRadius, st::appIconPageFadeHeight));
+		edge->raise();
+		edge->update();
+	}, edge->lifetime());
+
+	_state->repaints.events(
+	) | rpl::on_next([=] {
+		edge->update();
+	}, edge->lifetime());
+
+	edge->paintRequest(
+	) | rpl::on_next([=] {
+		auto p = QPainter(edge);
+		auto hq = PainterHighQualityEnabler(p);
+		const auto radius = st::appIconPagePanelRadius;
+		const auto width = edge->width();
+		auto panel = QPainterPath();
+		panel.addRoundedRect(
+			QRectF(0, 0, width, edge->height() + radius),
+			radius,
+			radius);
+		auto corners = QPainterPath();
+		corners.addRect(QRectF(0, 0, width, radius));
+		corners = corners.subtracted(panel);
+
+		const auto top = HeaderHeight() + edge->y() - _scrollTop.current();
+		PaintHero(p, *_state, corners, width, top);
+
+		if (_state->fade > 0.) {
+			const auto height = st::appIconPageFadeHeight;
+			auto from = panelBg()->c;
+			auto to = from;
+			to.setAlpha(0);
+			auto gradient = QLinearGradient(0, 0, 0, height);
+			gradient.setStops({ { 0., from }, { 1., to } });
+			p.setClipPath(panel);
+			p.setOpacity(_state->fade);
+			p.fillRect(QRect(0, 0, width, height), QBrush(gradient));
+		}
+	}, edge->lifetime());
 }
 
 base::weak_qptr<Ui::RpWidget> AppIconSection::createPinnedToTop(
 		not_null<QWidget*> parent) {
-	const auto content = Ui::CreateChild<AppIconTopBar>(
+	const auto content = Ui::CreateChild<AppIconHeader>(
 		parent.get(),
 		_state);
 
@@ -932,8 +1053,6 @@ base::weak_qptr<Ui::RpWidget> AppIconSection::createPinnedToTop(
 	) | rpl::on_next([=](Info::Wrap wrap) {
 		content->setRoundEdges(wrap == Info::Wrap::Layer);
 	}, content->lifetime());
-
-	content->resize(content->width(), content->maximumHeight());
 
 	_wrap.value(
 	) | rpl::on_next([=](Info::Wrap wrap) {
@@ -985,84 +1104,72 @@ base::weak_qptr<Ui::RpWidget> AppIconSection::createPinnedToTop(
 		}
 	}, content->lifetime());
 
-	setupEdge(parent, content);
+	setupHero(parent, content);
 	setupTabs(parent);
 
 	return base::make_weak(not_null<Ui::RpWidget*>{ content });
 }
 
-void AppIconSection::setupEdge(
+void AppIconSection::setupHero(
 		not_null<QWidget*> parent,
-		not_null<AppIconTopBar*> bar) {
-	_edge = base::make_unique_q<Ui::RpWidget>(parent.get());
-	const auto edge = _edge.get();
-	edge->setAttribute(Qt::WA_TransparentForMouseEvents);
-
-	bar->geometryValue(
-	) | rpl::on_next([=](QRect geometry) {
-		edge->setGeometry(
-			geometry.x(),
-			geometry.y() + geometry.height(),
-			geometry.width(),
-			std::max(st::appIconPagePanelRadius, st::appIconPageFadeHeight));
-		edge->raise();
-	}, edge->lifetime());
-
-	rpl::combine(
-		bar->heightValue(),
-		geometryValue()
-	) | rpl::on_next([=](int height, QRect geometry) {
-		const auto scrolled = (bar->maximumHeight() - height)
-			+ std::max(0, -geometry.y());
-		_state->fade = std::min(
-			1.,
-			scrolled / float64(st::appIconPageFadeDistance));
-		edge->update();
-	}, edge->lifetime());
-
-	_state->repaints.events(
+		not_null<AppIconHeader*> header) {
+	_heroBack = base::make_unique_q<Ui::RpWidget>(parent.get());
+	const auto back = _heroBack.get();
+	back->setAttribute(Qt::WA_TransparentForMouseEvents);
+	back->paintRequest(
 	) | rpl::on_next([=] {
-		edge->update();
-	}, edge->lifetime());
+		auto p = QPainter(back);
+		auto area = QPainterPath();
+		area.addRect(QRectF(back->rect()));
+		PaintHero(p, *_state, area, back->width(), back->y());
+	}, back->lifetime());
 
-	edge->paintRequest(
+	_heroPreview = base::make_unique_q<Ui::RpWidget>(parent.get());
+	const auto preview = _heroPreview.get();
+	preview->setAttribute(Qt::WA_TransparentForMouseEvents);
+	const auto image = preview->lifetime().make_state<QImage>();
+	_state->selected.value(
+	) | rpl::on_next([=](const QString &id) {
+		*image = LoadIconImage(id, st::appIconPagePreviewSize);
+		preview->update();
+	}, preview->lifetime());
+	preview->paintRequest(
 	) | rpl::on_next([=] {
-		auto p = QPainter(edge);
+		auto p = QPainter(preview);
 		auto hq = PainterHighQualityEnabler(p);
-		const auto radius = st::appIconPagePanelRadius;
-		const auto width = edge->width();
-		auto panel = QPainterPath();
-		panel.addRoundedRect(
-			QRectF(0, 0, width, edge->height() + radius),
-			radius,
-			radius);
-		auto corners = QPainterPath();
-		corners.addRect(0, 0, width, radius);
-		corners = corners.subtracted(panel);
-
 		const auto collapse = _state->collapse.current();
-		p.fillPath(corners, BaseColor(*_state));
-		if (_state->tint && collapse < 1.) {
-			const auto offset = QPointF(0., edge->y() - bar->y());
-			p.setOpacity(1. - collapse);
-			p.fillPath(corners, GlowBrush(
-				*_state->tint,
-				bar->glowCenter() - offset,
-				bar->glowRadius()));
-			p.setOpacity(1.);
-		}
-		if (_state->fade > 0.) {
-			const auto height = st::appIconPageFadeHeight;
-			auto from = st::windowBg->c;
-			auto to = from;
-			to.setAlpha(0);
-			auto gradient = QLinearGradient(0, 0, 0, height);
-			gradient.setStops({ { 0., from }, { 1., to } });
-			p.setClipPath(panel);
-			p.setOpacity(_state->fade);
-			p.fillRect(QRect(0, 0, width, height), QBrush(gradient));
-		}
-	}, edge->lifetime());
+		const auto full = float64(st::appIconPagePreviewSize);
+		const auto size = full
+			+ (st::appIconPagePreviewCollapsed - full) * collapse;
+		const auto from = GlowCenterY();
+		const auto to = HeaderHeight() / 2.;
+		const auto center = QPointF(
+			preview->width() / 2.,
+			from + (to - from) * collapse);
+		p.drawImage(
+			QRectF(
+				center.x() - size / 2.,
+				center.y() - size / 2.,
+				size,
+				size),
+			*image);
+	}, preview->lifetime());
+
+	rpl::merge(
+		_state->repaints.events(),
+		_state->collapse.changes() | rpl::to_empty
+	) | rpl::on_next([=] {
+		back->update();
+		preview->update();
+	}, preview->lifetime());
+
+	header->widthValue(
+	) | rpl::on_next([=](int width) {
+		back->setGeometry(0, HeaderHeight(), width, HeroBodyHeight());
+		back->lower();
+		preview->setGeometry(0, 0, width, HeaderHeight() + HeroBodyHeight());
+		preview->raise();
+	}, preview->lifetime());
 }
 
 void AppIconSection::setupTabs(not_null<QWidget*> parent) {
