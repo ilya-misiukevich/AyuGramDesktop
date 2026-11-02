@@ -22,7 +22,6 @@
 #include "styles/style_profile.h"
 #include "styles/style_settings.h"
 #include "ui/color_contrast.h"
-#include "ui/effects/animation_value.h"
 #include "ui/effects/animations.h"
 #include "ui/painter.h"
 #include "ui/text/text_utilities.h"
@@ -42,8 +41,6 @@
 #endif
 
 #include <QSvgRenderer>
-#include <QtWidgets/QApplication>
-#include <QtWidgets/QScrollBar>
 
 namespace Settings {
 namespace {
@@ -55,7 +52,6 @@ constexpr auto kMinColumns = 3;
 constexpr auto kMaxColumns = 8;
 constexpr auto kAccentSize = 24; // AppIcons.accent samples a 24x24 bitmap
 constexpr auto kTintDuration = crl::time(280);
-constexpr auto kScrollStepTime = crl::time(260);
 constexpr auto kTextCollapsePart = 0.35;
 constexpr auto kGlowRadius = 0.9;
 constexpr auto kMinAcceptableContrast = 4.5; // as in premium_top_bar.cpp
@@ -894,51 +890,6 @@ void AppIconSection::setupScroll() {
 			top / float64(st::appIconPageFadeDistance));
 		_state->collapse = std::clamp(top / float64(HeroBodyHeight()), 0., 1.);
 	}, lifetime());
-
-	struct WheelState {
-		Ui::Animations::Basic animation;
-		int fromTop = 0;
-		int targetTop = 0;
-		crl::time startTime = 0;
-	};
-	const auto scroll = _scroll;
-	const auto wheel = scroll->lifetime().make_state<WheelState>();
-	const auto single = scroll->verticalScrollBar()->singleStep()
-		* QApplication::wheelScrollLines();
-	// WHY: a wheel notch jumps a whole step at once; the profile animates
-	// it in info_flexible_scroll.cpp, copied here without its cover-specific
-	// snap steps so the collapse follows the scroll as smoothly as a finger.
-	wheel->animation.init([=](crl::time now) {
-		const auto progress = std::clamp(
-			(now - wheel->startTime) / float64(kScrollStepTime),
-			0.,
-			1.);
-		scroll->scrollToY(anim::interpolate(
-			wheel->fromTop,
-			wheel->targetTop,
-			anim::easeOutQuint(1., progress)));
-		if (progress >= 1.) {
-			wheel->animation.stop();
-		}
-	});
-	scroll->setCustomWheelProcess([=](not_null<QWheelEvent*> e) {
-		const auto delta = e->angleDelta().y();
-		if (std::abs(delta) != 120 || e->phase() != Qt::NoScrollPhase) {
-			wheel->animation.stop();
-			return false;
-		}
-		const auto base = wheel->animation.animating()
-			? wheel->targetTop
-			: scroll->scrollTop();
-		const auto diff = (delta > 0) ? -single : single;
-		wheel->targetTop = std::clamp(base + diff, 0, scroll->scrollTopMax());
-		wheel->fromTop = scroll->scrollTop();
-		wheel->startTime = crl::now();
-		if (!wheel->animation.animating()) {
-			wheel->animation.start();
-		}
-		return true;
-	});
 }
 
 void AppIconSection::setupLabels() {

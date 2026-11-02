@@ -328,7 +328,7 @@ jobs:
           cp -r custom/icons/. Telegram/Resources/art/ayu/
           cp custom/brand/art/* Telegram/Resources/art/
           cp custom/icons/monet_extera_tg_light/app_icon.ico Telegram/Resources/art/icon256.ico
-          cp custom/src/app_icon_box.* Telegram/SourceFiles/ayu/ui/boxes/
+          cp custom/src/* Telegram/SourceFiles/ayu/ui/boxes/
 
           qrc=Telegram/Resources/qrc/ayu/custom.qrc
           {

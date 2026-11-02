@@ -1,0 +1,34 @@
+diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
+index 223b24d808a1a0666a9c92c7d59b497cdf9eb578..a8900d4c9fb62dc38b40cbb69287c03ea3e3e80d 100644
+--- a/Telegram/CMakeLists.txt
++++ b/Telegram/CMakeLists.txt
+@@ -197,6 +197,8 @@ set(ayugram_files
+         ayu/ui/boxes/donate_info_box.h
+         ayu/ui/boxes/plugin_info_box.cpp
+         ayu/ui/boxes/plugin_info_box.h
++        ayu/ui/boxes/smooth_scroll.cpp
++        ayu/ui/boxes/smooth_scroll.h
+         ayu/ui/components/image_view.cpp
+         ayu/ui/components/image_view.h
+         ayu/ui/components/icon_picker.cpp
+diff --git a/Telegram/SourceFiles/info/settings/info_settings_widget.cpp b/Telegram/SourceFiles/info/settings/info_settings_widget.cpp
+index 39b6f7f824a776a6e11a50c155c443edaf8b61e1..463496c1a7d577e8cf15b4c97528f65c754a448b 100644
+--- a/Telegram/SourceFiles/info/settings/info_settings_widget.cpp
++++ b/Telegram/SourceFiles/info/settings/info_settings_widget.cpp
+@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ // AyuGram includes
+ #include "ayu/ui/settings/settings_main.h"
++#include "ayu/ui/boxes/smooth_scroll.h"
+ 
+ 
+ namespace Info {
+@@ -161,6 +162,8 @@ Widget::Widget(
+ 			return e->type() == QEvent::Wheel;
+ 		}));
+ 	}
++
++	AyuUi::SetupSmoothWheelScroll(scroll());
+ }
+ 
+ Widget::~Widget() = default;
