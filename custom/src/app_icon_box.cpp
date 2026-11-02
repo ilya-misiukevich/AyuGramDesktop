@@ -7,9 +7,7 @@
 #include "base/flat_map.h"
 #include "base/unique_qptr.h"
 #include "core/application.h"
-#include "info/info_wrap_widget.h"
 #include "info/profile/tabs/info_profile_tabs_strip.h"
-#include "info/settings/info_settings_widget.h"
 #include "lang/lang_keys.h"
 #include "main/main_domain.h"
 #include "settings/settings_common.h"
@@ -30,7 +28,6 @@
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/scroll_area.h"
-#include "ui/wrap/fade_wrap.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/main_window.h"
@@ -44,8 +41,6 @@
 
 namespace Settings {
 namespace {
-
-using SectionCustomTopBarData = Info::Settings::SectionCustomTopBarData;
 
 constexpr auto kCaptionLines = 2;
 constexpr auto kMinColumns = 3;
@@ -486,6 +481,32 @@ void ApplyIcon(const QString &id) {
 	Core::App().domain().notifyUnreadBadgeChanged();
 }
 
+[[nodiscard]] int ColumnsForWidth(int width) {
+	const auto count = std::clamp(
+		int(std::lround(width / float64(st::appIconPageColumnWidth))),
+		kMinColumns,
+		kMaxColumns);
+	return (count < kMaxColumns
+		&& width / float64(count) > st::appIconPageColumnMaxWidth)
+		? (count + 1)
+		: count;
+}
+
+[[nodiscard]] int GridRowHeight() {
+	return st::iconPickerIconSize
+		+ st::iconPickerSelectedPadding * 2
+		+ st::appIconPageCaptionSkip
+		+ st::normalFont->height * kCaptionLines;
+}
+
+[[nodiscard]] int GridHeight(int count, int width) {
+	const auto columns = ColumnsForWidth(width);
+	const auto rows = (count + columns - 1) / columns;
+	return rows
+		? (rows * GridRowHeight() + (rows - 1) * st::appIconPageRowSkip)
+		: 0;
+}
+
 class IconsGrid final : public Ui::RpWidget {
 public:
 	IconsGrid(
@@ -538,9 +559,7 @@ int IconsGrid::selectionSize() const {
 }
 
 int IconsGrid::rowHeight() const {
-	return selectionSize()
-		+ st::appIconPageCaptionSkip
-		+ st::normalFont->height * kCaptionLines;
+	return GridRowHeight();
 }
 
 int IconsGrid::cellLeft(int column) const {
@@ -548,18 +567,8 @@ int IconsGrid::cellLeft(int column) const {
 }
 
 int IconsGrid::resizeGetHeight(int newWidth) {
-	const auto count = std::clamp(
-		int(std::lround(newWidth / float64(st::appIconPageColumnWidth))),
-		kMinColumns,
-		kMaxColumns);
-	_columns = (count < kMaxColumns
-		&& newWidth / float64(count) > st::appIconPageColumnMaxWidth)
-		? (count + 1)
-		: count;
-	const auto rows = (int(_icons.size()) + _columns - 1) / _columns;
-	return rows
-		? (rows * rowHeight() + (rows - 1) * st::appIconPageRowSkip)
-		: 0;
+	_columns = ColumnsForWidth(newWidth);
+	return GridHeight(int(_icons.size()), newWidth);
 }
 
 int IconsGrid::indexAt(QPoint point) const {
@@ -747,18 +756,17 @@ public:
 	AppIconSection(
 		QWidget *parent,
 		not_null<Window::SessionController*> controller,
-		not_null<Ui::ScrollArea*> scroll);
+		not_null<Ui::ScrollArea*> scroll,
+		rpl::producer<Container> containerValue);
 
 	[[nodiscard]] rpl::producer<QString> title() override;
 
 	[[nodiscard]] base::weak_qptr<Ui::RpWidget> createPinnedToTop(
 		not_null<QWidget*> parent) override;
 
-	[[nodiscard]] bool hasFlexibleTopBar() const override;
-
-	void setStepDataReference(std::any &data) override;
-
 	[[nodiscard]] rpl::producer<> sectionShowBack() override final;
+
+	[[nodiscard]] rpl::producer<int> desiredHeightValue() const override;
 
 protected:
 	void paintEvent(QPaintEvent *e) override;
@@ -776,15 +784,15 @@ private:
 
 	const not_null<Ui::ScrollArea*> _scroll;
 	const std::shared_ptr<PageState> _state;
-	base::unique_qptr<Ui::FadeWrap<Ui::IconButton>> _back;
+	base::unique_qptr<Ui::IconButton> _back;
 	base::unique_qptr<Ui::IconButton> _close;
 	base::unique_qptr<Ui::FlatLabel> _title;
 	base::unique_qptr<Ui::RpWidget> _heroBack;
 	base::unique_qptr<Ui::RpWidget> _heroPreview;
 	base::unique_qptr<Info::Profile::TabsStrip> _tabs;
 	rpl::variable<int> _scrollTop;
-	rpl::variable<bool> _backToggles;
-	rpl::variable<Info::Wrap> _wrap;
+	rpl::variable<int> _desiredHeight;
+	rpl::variable<bool> _isLayer;
 	rpl::event_stream<> _showBack;
 
 };
@@ -792,10 +800,14 @@ private:
 AppIconSection::AppIconSection(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
-	not_null<Ui::ScrollArea*> scroll)
+	not_null<Ui::ScrollArea*> scroll,
+	rpl::producer<Container> containerValue)
 : Section(parent, controller)
 , _scroll(scroll)
-, _state(std::make_shared<PageState>()) {
+, _state(std::make_shared<PageState>())
+, _isLayer(std::move(containerValue) | rpl::map([](Container container) {
+	return (container == Container::Layer);
+})) {
 	const auto current = CurrentIcon();
 	_state->selected = current;
 	_state->tab = GroupIndex(current);
@@ -825,28 +837,16 @@ rpl::producer<QString> AppIconSection::title() {
 	return tr::ayu_AppIconHeader();
 }
 
-bool AppIconSection::hasFlexibleTopBar() const {
-	return true;
-}
-
 rpl::producer<> AppIconSection::sectionShowBack() {
 	return _showBack.events();
 }
 
-void AppIconSection::setStepDataReference(std::any &data) {
-	const auto my = std::any_cast<SectionCustomTopBarData>(&data);
-	if (my) {
-		_backToggles = std::move(
-			my->backButtonEnables
-		) | rpl::map_to(true);
-		_wrap = std::move(my->wrapValue);
-	}
+rpl::producer<int> AppIconSection::desiredHeightValue() const {
+	return _desiredHeight.value();
 }
 
 const style::color &AppIconSection::panelBg() const {
-	return (_wrap.current() == Info::Wrap::Layer)
-		? st::boxBg
-		: st::profileBg;
+	return _isLayer.current() ? st::boxBg : st::profileBg;
 }
 
 void AppIconSection::paintEvent(QPaintEvent *e) {
@@ -877,7 +877,24 @@ void AppIconSection::setupContent() {
 	Ui::AddSkip(content, st::appIconPageGridBottom);
 	Ui::ResizeFitChild(this, content);
 
-	_wrap.changes() | rpl::on_next([=] {
+	widthValue() | rpl::on_next([=](int width) {
+		const auto &padding = st::appIconPageGridPadding;
+		const auto gridWidth = width - padding.left() - padding.right();
+		auto tallest = 0;
+		for (const auto &group : Groups()) {
+			tallest = std::max(
+				tallest,
+				GridHeight(int(group.icons.size()), gridWidth));
+		}
+		_desiredHeight = HeroBodyHeight()
+			+ st::appIconPageGridTop
+			+ padding.top()
+			+ tallest
+			+ padding.bottom()
+			+ st::appIconPageGridBottom;
+	}, lifetime());
+
+	_isLayer.changes() | rpl::on_next([=] {
 		update();
 	}, lifetime());
 }
@@ -1001,14 +1018,20 @@ base::weak_qptr<Ui::RpWidget> AppIconSection::createPinnedToTop(
 		parent.get(),
 		_state);
 
-	_wrap.value(
-	) | rpl::on_next([=](Info::Wrap wrap) {
-		content->setRoundEdges(wrap == Info::Wrap::Layer);
+	_isLayer.value(
+	) | rpl::on_next([=](bool isLayer) {
+		content->setRoundEdges(isLayer);
 	}, content->lifetime());
 
-	_wrap.value(
-	) | rpl::on_next([=](Info::Wrap wrap) {
-		const auto isLayer = (wrap == Info::Wrap::Layer);
+	content->events(
+	) | rpl::filter([](not_null<QEvent*> e) {
+		return (e->type() == QEvent::Wheel);
+	}) | rpl::on_next([=](not_null<QEvent*> e) {
+		_scroll->viewportEvent(e);
+	}, content->lifetime());
+
+	_isLayer.value(
+	) | rpl::on_next([=](bool isLayer) {
 		const auto &topBar = isLayer ? st::infoLayerTopBar : st::infoTopBar;
 		_title = base::make_unique_q<Ui::FlatLabel>(
 			content,
@@ -1020,24 +1043,11 @@ base::weak_qptr<Ui::RpWidget> AppIconSection::createPinnedToTop(
 			_title->setOpacity(1. - TextProgress(collapse));
 		}, _title->lifetime());
 
-		_back = base::make_unique_q<Ui::FadeWrap<Ui::IconButton>>(
-			content,
-			object_ptr<Ui::IconButton>(content, topBar.back),
-			st::infoTopBarScale);
-		_back->setDuration(0);
-		_back->toggleOn(isLayer
-			? _backToggles.value() | rpl::type_erased
-			: rpl::single(true));
-		_back->entity()->addClickHandler([=] {
+		_back = base::make_unique_q<Ui::IconButton>(content, topBar.back);
+		_back->addClickHandler([=] {
 			_showBack.fire({});
 		});
-		_back->toggledValue(
-		) | rpl::on_next([=](bool toggled) {
-			const auto &st = isLayer ? st::infoLayerTopBar : st::infoTopBar;
-			_title->moveToLeft(
-				toggled ? st.back.width : st.titlePosition.x(),
-				st.titlePosition.y());
-		}, _back->lifetime());
+		_title->moveToLeft(topBar.back.width, topBar.titlePosition.y());
 
 		if (!isLayer) {
 			_close = nullptr;
@@ -1180,7 +1190,11 @@ object_ptr<AbstractSection> SectionFactory<AppIconSection>::create(
 		not_null<Window::SessionController*> controller,
 		not_null<Ui::ScrollArea*> scroll,
 		rpl::producer<Container> containerValue) const {
-	return object_ptr<AppIconSection>(parent, controller, scroll);
+	return object_ptr<AppIconSection>(
+		parent,
+		controller,
+		scroll,
+		std::move(containerValue));
 }
 
 Type AppIconId() {
