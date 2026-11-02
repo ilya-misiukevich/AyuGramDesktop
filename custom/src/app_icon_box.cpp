@@ -19,6 +19,7 @@
 #include "styles/style_info.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
+#include "styles/style_profile.h"
 #include "styles/style_settings.h"
 #include "ui/color_contrast.h"
 #include "ui/effects/animation_value.h"
