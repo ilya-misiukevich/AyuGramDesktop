@@ -311,6 +311,19 @@ jobs:
             fi
           done
 
+          for p in custom/patches/lib_ui/*.patch; do
+            echo "Patch (lib_ui): $p"
+            (
+              cd Telegram/lib_ui
+              if ! git apply --index "../../$p"; then
+                if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+                  git fetch --unshallow --quiet
+                fi
+                git apply --index --3way "../../$p"
+              fi
+            )
+          done
+
           for d in custom/icons/*/; do
             n=$(basename "$d")
             if [ -e "Telegram/Resources/art/ayu/$n" ]; then

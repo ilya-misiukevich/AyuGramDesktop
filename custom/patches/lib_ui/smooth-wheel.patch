@@ -1,0 +1,253 @@
+diff --git a/ui/widgets/elastic_scroll.cpp b/ui/widgets/elastic_scroll.cpp
+index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893768ce458 100644
+--- a/ui/widgets/elastic_scroll.cpp
++++ b/ui/widgets/elastic_scroll.cpp
+@@ -70,6 +70,7 @@ constexpr auto kRubberBandAmplitude = 0.31;
+ constexpr auto kRubberBandPeriod = 1.6;
+ constexpr auto kRubberBandMaxReturnDuration = crl::time(1000);
+ constexpr auto kVelocityZeroingTimeout = crl::time(100);
++constexpr auto kSmoothWheelDuration = crl::time(260);
+ constexpr auto kMinimumOverscrollBeforeStretch = 10;
+ 
+ // Pull-to-action sides need to follow the finger much closer than the
+@@ -423,6 +424,10 @@ ElasticScroll::ElasticScroll(
+ 	) | rpl::on_next([=](int from) {
+ 		tryScrollTo(from, false);
+ 	}, _bar->lifetime());
++
++	_smoothWheelAnimation.init([=](crl::time now) {
++		smoothWheelStep(now);
++	});
+ }
+ 
+ ElasticScroll::~ElasticScroll() {
+@@ -952,7 +957,9 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
+ 			if (!weak) {
+ 				return true;
+ 			}
+-			tryScrollTo(_state.visibleFrom + delta);
++			if (!processSmoothWheel(e, delta, touch)) {
++				tryScrollTo(_state.visibleFrom + delta);
++			}
+ 			_movement = Movement::None;
+ 		} else if (!_overscrollReturnAnimation.animating()) {
+ 			overscrollReturn();
+@@ -1095,6 +1102,68 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
+ 	return true;
+ }
+ 
++bool ElasticScroll::processSmoothWheel(
++		not_null<QWheelEvent*> e,
++		int delta,
++		bool touch) {
++	const auto angle = _vertical ? e->angleDelta().y() : e->angleDelta().x();
++	if (touch
++		|| !delta
++		|| std::abs(angle) != 120
++		|| e->modifiers() != Qt::NoModifier
++		|| _disabled) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = std::nullopt;
++		return false;
++	}
++	const auto animating = _smoothWheelAnimation.animating();
++	const auto base = animating ? _smoothWheelTarget : _state.visibleFrom;
++	const auto target = willScrollTo(base + delta);
++	if (!animating && target == base) {
++		return false;
++	}
++	_smoothWheelTarget = target;
++	_smoothWheelFrom = _state.visibleFrom;
++	_smoothWheelStart = crl::now();
++	_smoothWheelLastApplied = std::nullopt;
++	if (!animating) {
++		_smoothWheelAnimation.start();
++	}
++	return true;
++}
++
++void ElasticScroll::smoothWheelStep(crl::time now) {
++	if (_smoothWheelLastApplied
++		&& _state.visibleFrom != *_smoothWheelLastApplied) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = std::nullopt;
++		return;
++	}
++	const auto progress = std::clamp(
++		(now - _smoothWheelStart) / float64(kSmoothWheelDuration),
++		0.,
++		1.);
++	const auto value = anim::interpolate(
++		_smoothWheelFrom,
++		_smoothWheelTarget,
++		anim::easeOutQuint(1., progress));
++	const auto expected = willScrollTo(value);
++	const auto weak = base::make_weak(this);
++	tryScrollTo(value);
++	if (!weak) {
++		return;
++	} else if (_state.visibleFrom != expected) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = std::nullopt;
++		return;
++	}
++	_smoothWheelLastApplied = _state.visibleFrom;
++	if (progress >= 1.) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = std::nullopt;
++	}
++}
++
+ bool ElasticScroll::requestBottomContent(int delta) {
+ 	if (!_bottomContentRequest
+ 		|| _insideBottomContentRequest
+diff --git a/ui/widgets/elastic_scroll.h b/ui/widgets/elastic_scroll.h
+index 7909e165ec68e52dad0c2c6697baf95858c6a0e4..386a36b790fa0afc75368ec16f94fc1203aa6ca4 100644
+--- a/ui/widgets/elastic_scroll.h
++++ b/ui/widgets/elastic_scroll.h
+@@ -288,6 +288,9 @@ private:
+ 	void touchUpdateSpeed();
+ 	void touchDeaccelerate(int32 elapsed);
+ 
++	bool processSmoothWheel(not_null<QWheelEvent*> e, int delta, bool touch);
++	void smoothWheelStep(crl::time now);
++
+ 	struct AccumulatedParts {
+ 		int base = 0;
+ 		int relative = 0;
+@@ -369,6 +372,11 @@ private:
+ 	Fn<bool()> _bottomContentRequest;
+ 	std::optional<QColor> _overscrollBg;
+ 	Ui::Animations::Simple _overscrollReturnAnimation;
++	Ui::Animations::Basic _smoothWheelAnimation;
++	int _smoothWheelFrom = 0;
++	int _smoothWheelTarget = 0;
++	std::optional<int> _smoothWheelLastApplied;
++	crl::time _smoothWheelStart = 0;
+ 	rpl::variable<Position> _position;
+ 	rpl::variable<Movement> _movement;
+ 
+diff --git a/ui/widgets/scroll_area.cpp b/ui/widgets/scroll_area.cpp
+index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469aac1ab86b 100644
+--- a/ui/widgets/scroll_area.cpp
++++ b/ui/widgets/scroll_area.cpp
+@@ -20,6 +20,8 @@
+ namespace Ui {
+ namespace {
+ 
++constexpr auto kSmoothWheelDuration = crl::time(260);
++
+ [[nodiscard]] int ComputeScrollTo(
+ 		int toFrom,
+ 		int toTill,
+@@ -444,6 +446,10 @@ ScrollArea::ScrollArea(
+ 		_touchTimer.setCallback([=] { _touchRightButton = true; });
+ 		_touchScrollTimer.setCallback([=] { touchScrollTimer(); });
+ 	}
++
++	_smoothWheelAnimation.init([=](crl::time now) {
++		smoothWheelStep(now);
++	});
+ }
+ 
+ void ScrollArea::touchDeaccelerate(int32 elapsed) {
+@@ -649,10 +655,72 @@ bool ScrollArea::viewportEvent(QEvent *e) {
+ 						phase);
+ 			}
+ 		}
++		if (processSmoothWheel(ev)) {
++			return true;
++		}
+ 	}
+ 	return QScrollArea::viewportEvent(e);
+ }
+ 
++bool ScrollArea::processSmoothWheel(not_null<QWheelEvent*> e) {
++	const auto delta = e->angleDelta().y();
++	if (std::abs(delta) != 120
++		|| e->phase() != Qt::NoScrollPhase
++		|| e->modifiers() != Qt::NoModifier
++		|| _disabled) {
++		_smoothWheelAnimation.stop();
++		return false;
++	}
++	const auto single = verticalScrollBar()->singleStep()
++		* QApplication::wheelScrollLines();
++	const auto animating = _smoothWheelAnimation.animating();
++	const auto base = animating ? _smoothWheelTarget : scrollTop();
++	const auto target = std::clamp(
++		base + ((delta > 0) ? -single : single),
++		0,
++		scrollTopMax());
++	if (!animating && target == base) {
++		return false;
++	}
++	_smoothWheelTarget = target;
++	_smoothWheelFrom = scrollTop();
++	_smoothWheelStart = crl::now();
++	_smoothWheelLastApplied = -1;
++	if (!animating) {
++		_smoothWheelAnimation.start();
++	}
++	return true;
++}
++
++void ScrollArea::smoothWheelStep(crl::time now) {
++	if (_smoothWheelLastApplied >= 0
++		&& scrollTop() != _smoothWheelLastApplied) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = -1;
++		return;
++	}
++	const auto progress = std::clamp(
++		(now - _smoothWheelStart) / float64(kSmoothWheelDuration),
++		0.,
++		1.);
++	const auto value = anim::interpolate(
++		_smoothWheelFrom,
++		_smoothWheelTarget,
++		anim::easeOutQuint(1., progress));
++	scrollToY(value);
++	const auto actual = scrollTop();
++	if (actual != std::clamp(value, 0, scrollTopMax())) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = -1;
++		return;
++	}
++	_smoothWheelLastApplied = actual;
++	if (progress >= 1.) {
++		_smoothWheelAnimation.stop();
++		_smoothWheelLastApplied = -1;
++	}
++}
++
+ bool ScrollArea::filterOutTouchEvent(QEvent *e) {
+ 	const auto type = e->type();
+ 	if (type == QEvent::TouchBegin
+diff --git a/ui/widgets/scroll_area.h b/ui/widgets/scroll_area.h
+index a05ab78b40b2f3af5c4d3b3ff8795cb9b01f9893..0983378185c363e8070072a9f6425f40a1b6f6a8 100644
+--- a/ui/widgets/scroll_area.h
++++ b/ui/widgets/scroll_area.h
+@@ -238,6 +238,9 @@ private:
+ 	void touchUpdateSpeed();
+ 	void touchDeaccelerate(int32 elapsed);
+ 
++	bool processSmoothWheel(not_null<QWheelEvent*> e);
++	void smoothWheelStep(crl::time now);
++
+ 	bool _disabled = false;
+ 	bool _movingByScrollBar = false;
+ 
+@@ -270,6 +273,12 @@ private:
+ 	bool _wheelDirectionLocked = false;
+ 	bool _widgetAcceptsTouch = false;
+ 
++	Animations::Basic _smoothWheelAnimation;
++	int _smoothWheelFrom = 0;
++	int _smoothWheelTarget = 0;
++	int _smoothWheelLastApplied = -1;
++	crl::time _smoothWheelStart = 0;
++
+ 	object_ptr<QWidget> _widget = { nullptr };
+ 
+ 	rpl::event_stream<int> _scrollTopUpdated;
