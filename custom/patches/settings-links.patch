@@ -1,8 +1,8 @@
 diff --git a/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp b/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp
-index acb24bfa3497eeb43c06431f3e28be65e702d803..902c10b647a868c7fc69925f46f11d27be5ea010 100644
+index acb24bfa3497eeb43c06431f3e28be65e702d803..95f1e195f27b7e66047a2c0601a1162369a561aa 100644
 --- a/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp
 +++ b/Telegram/SourceFiles/ayu/ui/settings/settings_main.cpp
-@@ -134,21 +134,10 @@ void BuildLinks(SectionBuilder &builder) {
+@@ -134,10 +134,10 @@ void BuildLinks(SectionBuilder &builder) {
  		.id = u"ayu/channel"_q,
  		.title = tr::ayu_LinksChannel(),
  		.icon = { &st::menuIconChannel },
@@ -11,17 +11,6 @@ index acb24bfa3497eeb43c06431f3e28be65e702d803..902c10b647a868c7fc69925f46f11d27
  		.onClick = [=] {
  			controller->showPeerByLink(Window::PeerByLinkInfo{
 -				.usernameOrId = QString("ayugram"),
--			});
--		},
--	});
--	builder.addButton({
--		.id = u"ayu/chat"_q,
--		.title = tr::ayu_LinksChats(),
--		.icon = { &st::menuIconChats },
--		.label = rpl::single(QString("@ayugramchat")),
--		.onClick = [=] {
--			controller->showPeerByLink(Window::PeerByLinkInfo{
--				.usernameOrId = QString("ayugramchat"),
 +				.usernameOrId = QString("AyuGramReleases"),
  			});
  		},
