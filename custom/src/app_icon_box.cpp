@@ -666,6 +666,40 @@ void IconsGrid::mouseReleaseEvent(QMouseEvent *e) {
 		+ st::appIconPagePreviewSize / 2.;
 }
 
+[[nodiscard]] QRectF PreviewRect(int width, float64 collapse) {
+	const auto full = float64(st::appIconPagePreviewSize);
+	const auto size = full + (st::appIconPagePreviewCollapsed - full) * collapse;
+	const auto from = GlowCenterY();
+	const auto to = HeaderHeight() / 2.;
+	const auto center = QPointF(width / 2., from + (to - from) * collapse);
+	return QRectF(
+		center.x() - size / 2.,
+		center.y() - size / 2.,
+		size,
+		size);
+}
+
+// WHY: QPainter filters only 2x2 source pixels, so shrinking more than
+// twice skips pixels and the collapsed icon gets jagged edges.
+[[nodiscard]] const QImage &PreviewImage(
+		const QImage &full,
+		QImage &cache,
+		float64 size) {
+	const auto ratio = full.devicePixelRatio();
+	const auto pixels = int(std::ceil(size * ratio));
+	if (pixels * 2 >= full.width()) {
+		return full;
+	} else if (cache.width() != pixels) {
+		cache = full.scaled(
+			pixels,
+			pixels,
+			Qt::IgnoreAspectRatio,
+			Qt::SmoothTransformation);
+		cache.setDevicePixelRatio(ratio);
+	}
+	return cache;
+}
+
 [[nodiscard]] float64 GlowRadius(int width) {
 	return std::max(width, HeaderHeight() + HeroBodyHeight()) * kGlowRadius;
 }
@@ -1104,31 +1138,21 @@ void AppIconSection::setupHero(
 	const auto preview = _heroPreview.get();
 	preview->setAttribute(Qt::WA_TransparentForMouseEvents);
 	const auto image = preview->lifetime().make_state<QImage>();
+	const auto scaled = preview->lifetime().make_state<QImage>();
 	_state->selected.value(
 	) | rpl::on_next([=](const QString &id) {
 		*image = LoadIconImage(id, st::appIconPagePreviewSize);
+		*scaled = QImage();
 		preview->update();
 	}, preview->lifetime());
 	preview->paintRequest(
 	) | rpl::on_next([=] {
 		auto p = QPainter(preview);
 		auto hq = PainterHighQualityEnabler(p);
-		const auto collapse = _state->collapse.current();
-		const auto full = float64(st::appIconPagePreviewSize);
-		const auto size = full
-			+ (st::appIconPagePreviewCollapsed - full) * collapse;
-		const auto from = GlowCenterY();
-		const auto to = HeaderHeight() / 2.;
-		const auto center = QPointF(
-			preview->width() / 2.,
-			from + (to - from) * collapse);
-		p.drawImage(
-			QRectF(
-				center.x() - size / 2.,
-				center.y() - size / 2.,
-				size,
-				size),
-			*image);
+		const auto rect = PreviewRect(
+			preview->width(),
+			_state->collapse.current());
+		p.drawImage(rect, PreviewImage(*image, *scaled, rect.width()));
 	}, preview->lifetime());
 
 	rpl::merge(

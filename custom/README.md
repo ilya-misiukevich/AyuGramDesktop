@@ -10,6 +10,7 @@
 | Страница выбора иконки (копируется в `Telegram/SourceFiles/ayu/ui/boxes/`) | `src/` |
 | Иконки: папка = иконка, внутри `app.png` 256px и `app_icon.ico` | `icons/` |
 | Официальные картинки Telegram | `brand/art/` |
+| Скрипт: размер и тень иконок как у Desktop | `tools/desktop_icon_style.py` |
 
 Патчи:
 - `names.patch` — имя exe, свойства файла, ярлыки, заголовки, ссылки, окно ошибки;
@@ -20,6 +21,6 @@
 - `settings-links.patch` — блок Links на странице AyuGram: строка Channel ведёт на @AyuGramReleases;
 - `lib_ui/smooth-wheel.patch` — плавная прокрутка колесом мыши везде: окна, настройки, списки, список чатов и сами чаты (`ScrollArea` и `ElasticScroll`, анимация из профиля Desktop). Если список сам сдвигает позицию из-за догрузки сообщений сверху, анимация едет вместе с ним, а не обрывается. Тачпад и программные переходы не трогает.
 
-Новая иконка: положить папку в `icons/` и добавить её в список в `src/app_icon_box.cpp`. При смене иконки старые `tdata/AyuGram-*.ico` удаляются, остаётся только текущий.
+Новая иконка: положить папку в `icons/` и добавить её в список в `src/app_icon_box.cpp`. Иконкам с Android (круг на всю площадь) дать размер и тень как у Desktop: `python custom/tools/desktop_icon_style.py custom/icons/<имя>`, скрипт перепишет `app.png` и `app_icon.ico`. При смене иконки старые `tdata/AyuGram-*.ico` удаляются, остаётся только текущий.
 
 Если AyuGram изменит код и патч перестанет ложиться, сборка упадёт на шаге «Apply custom changes» с именем файла. Патч пересоздаётся так: наложить патчи на свежий код, поправить, `git diff --full-index -- <файлы> > custom/patches/<имя>.patch`. Для lib_ui то же самое внутри `Telegram/lib_ui`, результат в `custom/patches/lib_ui/`.
