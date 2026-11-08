@@ -1,5 +1,5 @@
 diff --git a/ui/widgets/elastic_scroll.cpp b/ui/widgets/elastic_scroll.cpp
-index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893768ce458 100644
+index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..433ea63dc3c370eccbfd764fdb484e9a149da1ab 100644
 --- a/ui/widgets/elastic_scroll.cpp
 +++ b/ui/widgets/elastic_scroll.cpp
 @@ -70,6 +70,7 @@ constexpr auto kRubberBandAmplitude = 0.31;
@@ -32,7 +32,7 @@ index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893
  			_movement = Movement::None;
  		} else if (!_overscrollReturnAnimation.animating()) {
  			overscrollReturn();
-@@ -1095,6 +1102,68 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
+@@ -1095,6 +1102,99 @@ bool ElasticScroll::handleWheelEvent(not_null<QWheelEvent*> e, bool touch) {
  	return true;
  }
  
@@ -50,7 +50,16 @@ index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893
 +		_smoothWheelLastApplied = std::nullopt;
 +		return false;
 +	}
-+	const auto animating = _smoothWheelAnimation.animating();
++	auto animating = _smoothWheelAnimation.animating();
++	if (animating
++		&& _smoothWheelLastApplied
++		&& _state.visibleFrom != *_smoothWheelLastApplied
++		&& !smoothWheelFollowContent(
++			*_smoothWheelLastApplied,
++			_smoothWheelLastMax)) {
++		_smoothWheelAnimation.stop();
++		animating = false;
++	}
 +	const auto base = animating ? _smoothWheelTarget : _state.visibleFrom;
 +	const auto target = willScrollTo(base + delta);
 +	if (!animating && target == base) {
@@ -59,7 +68,8 @@ index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893
 +	_smoothWheelTarget = target;
 +	_smoothWheelFrom = _state.visibleFrom;
 +	_smoothWheelStart = crl::now();
-+	_smoothWheelLastApplied = std::nullopt;
++	_smoothWheelLastApplied = _state.visibleFrom;
++	_smoothWheelLastMax = smoothWheelMax();
 +	if (!animating) {
 +		_smoothWheelAnimation.start();
 +	}
@@ -68,7 +78,10 @@ index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893
 +
 +void ElasticScroll::smoothWheelStep(crl::time now) {
 +	if (_smoothWheelLastApplied
-+		&& _state.visibleFrom != *_smoothWheelLastApplied) {
++		&& _state.visibleFrom != *_smoothWheelLastApplied
++		&& !smoothWheelFollowContent(
++			*_smoothWheelLastApplied,
++			_smoothWheelLastMax)) {
 +		_smoothWheelAnimation.stop();
 +		_smoothWheelLastApplied = std::nullopt;
 +		return;
@@ -82,40 +95,60 @@ index 667a233eea2d8c1b4904d80f587e89d9d214b4ff..501246cc62afd3fda036376aae95a893
 +		_smoothWheelTarget,
 +		anim::easeOutQuint(1., progress));
 +	const auto expected = willScrollTo(value);
++	const auto max = smoothWheelMax();
 +	const auto weak = base::make_weak(this);
 +	tryScrollTo(value);
 +	if (!weak) {
 +		return;
-+	} else if (_state.visibleFrom != expected) {
++	} else if (_state.visibleFrom != expected
++		&& !smoothWheelFollowContent(expected, max)) {
 +		_smoothWheelAnimation.stop();
 +		_smoothWheelLastApplied = std::nullopt;
 +		return;
 +	}
 +	_smoothWheelLastApplied = _state.visibleFrom;
++	_smoothWheelLastMax = smoothWheelMax();
 +	if (progress >= 1.) {
 +		_smoothWheelAnimation.stop();
 +		_smoothWheelLastApplied = std::nullopt;
 +	}
 +}
 +
++int ElasticScroll::smoothWheelMax() const {
++	return _state.fullSize - (_state.visibleTill - _state.visibleFrom);
++}
++
++bool ElasticScroll::smoothWheelFollowContent(int position, int max) {
++	// The owner kept the view in place after the content above changed.
++	const auto shift = _state.visibleFrom - position;
++	if (!shift || (smoothWheelMax() - max) != shift) {
++		return false;
++	}
++	_smoothWheelFrom += shift;
++	_smoothWheelTarget += shift;
++	return true;
++}
++
  bool ElasticScroll::requestBottomContent(int delta) {
  	if (!_bottomContentRequest
  		|| _insideBottomContentRequest
 diff --git a/ui/widgets/elastic_scroll.h b/ui/widgets/elastic_scroll.h
-index 7909e165ec68e52dad0c2c6697baf95858c6a0e4..386a36b790fa0afc75368ec16f94fc1203aa6ca4 100644
+index 7909e165ec68e52dad0c2c6697baf95858c6a0e4..fa052e55d7717bb4245e9888c36c816a9586860b 100644
 --- a/ui/widgets/elastic_scroll.h
 +++ b/ui/widgets/elastic_scroll.h
-@@ -288,6 +288,9 @@ private:
+@@ -288,6 +288,11 @@ private:
  	void touchUpdateSpeed();
  	void touchDeaccelerate(int32 elapsed);
  
 +	bool processSmoothWheel(not_null<QWheelEvent*> e, int delta, bool touch);
 +	void smoothWheelStep(crl::time now);
++	[[nodiscard]] int smoothWheelMax() const;
++	bool smoothWheelFollowContent(int position, int max);
 +
  	struct AccumulatedParts {
  		int base = 0;
  		int relative = 0;
-@@ -369,6 +372,11 @@ private:
+@@ -369,6 +374,12 @@ private:
  	Fn<bool()> _bottomContentRequest;
  	std::optional<QColor> _overscrollBg;
  	Ui::Animations::Simple _overscrollReturnAnimation;
@@ -123,12 +156,13 @@ index 7909e165ec68e52dad0c2c6697baf95858c6a0e4..386a36b790fa0afc75368ec16f94fc12
 +	int _smoothWheelFrom = 0;
 +	int _smoothWheelTarget = 0;
 +	std::optional<int> _smoothWheelLastApplied;
++	int _smoothWheelLastMax = 0;
 +	crl::time _smoothWheelStart = 0;
  	rpl::variable<Position> _position;
  	rpl::variable<Movement> _movement;
  
 diff --git a/ui/widgets/scroll_area.cpp b/ui/widgets/scroll_area.cpp
-index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469aac1ab86b 100644
+index bf4af8e28694cdd2154cda30e031e6a28ec19472..27bfbb42490198bd297e03d3793e3322f8385af9 100644
 --- a/ui/widgets/scroll_area.cpp
 +++ b/ui/widgets/scroll_area.cpp
 @@ -20,6 +20,8 @@
@@ -151,7 +185,7 @@ index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469a
  }
  
  void ScrollArea::touchDeaccelerate(int32 elapsed) {
-@@ -649,10 +655,72 @@ bool ScrollArea::viewportEvent(QEvent *e) {
+@@ -649,10 +655,99 @@ bool ScrollArea::viewportEvent(QEvent *e) {
  						phase);
  			}
  		}
@@ -173,7 +207,16 @@ index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469a
 +	}
 +	const auto single = verticalScrollBar()->singleStep()
 +		* QApplication::wheelScrollLines();
-+	const auto animating = _smoothWheelAnimation.animating();
++	auto animating = _smoothWheelAnimation.animating();
++	if (animating
++		&& _smoothWheelLastApplied >= 0
++		&& scrollTop() != _smoothWheelLastApplied
++		&& !smoothWheelFollowContent(
++			_smoothWheelLastApplied,
++			_smoothWheelLastMax)) {
++		_smoothWheelAnimation.stop();
++		animating = false;
++	}
 +	const auto base = animating ? _smoothWheelTarget : scrollTop();
 +	const auto target = std::clamp(
 +		base + ((delta > 0) ? -single : single),
@@ -185,7 +228,8 @@ index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469a
 +	_smoothWheelTarget = target;
 +	_smoothWheelFrom = scrollTop();
 +	_smoothWheelStart = crl::now();
-+	_smoothWheelLastApplied = -1;
++	_smoothWheelLastApplied = scrollTop();
++	_smoothWheelLastMax = scrollTopMax();
 +	if (!animating) {
 +		_smoothWheelAnimation.start();
 +	}
@@ -194,7 +238,10 @@ index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469a
 +
 +void ScrollArea::smoothWheelStep(crl::time now) {
 +	if (_smoothWheelLastApplied >= 0
-+		&& scrollTop() != _smoothWheelLastApplied) {
++		&& scrollTop() != _smoothWheelLastApplied
++		&& !smoothWheelFollowContent(
++			_smoothWheelLastApplied,
++			_smoothWheelLastMax)) {
 +		_smoothWheelAnimation.stop();
 +		_smoothWheelLastApplied = -1;
 +		return;
@@ -207,38 +254,53 @@ index bf4af8e28694cdd2154cda30e031e6a28ec19472..5d05e41c807d5204f4b433e193bb469a
 +		_smoothWheelFrom,
 +		_smoothWheelTarget,
 +		anim::easeOutQuint(1., progress));
++	const auto max = scrollTopMax();
++	const auto expected = std::clamp(value, 0, max);
 +	scrollToY(value);
-+	const auto actual = scrollTop();
-+	if (actual != std::clamp(value, 0, scrollTopMax())) {
++	if (scrollTop() != expected
++		&& !smoothWheelFollowContent(expected, max)) {
 +		_smoothWheelAnimation.stop();
 +		_smoothWheelLastApplied = -1;
 +		return;
 +	}
-+	_smoothWheelLastApplied = actual;
++	_smoothWheelLastApplied = scrollTop();
++	_smoothWheelLastMax = scrollTopMax();
 +	if (progress >= 1.) {
 +		_smoothWheelAnimation.stop();
 +		_smoothWheelLastApplied = -1;
 +	}
 +}
 +
++bool ScrollArea::smoothWheelFollowContent(int position, int max) {
++	// The owner kept the view in place after the content above changed.
++	const auto shift = scrollTop() - position;
++	if (!shift || (scrollTopMax() - max) != shift) {
++		return false;
++	}
++	_smoothWheelFrom += shift;
++	_smoothWheelTarget += shift;
++	return true;
++}
++
  bool ScrollArea::filterOutTouchEvent(QEvent *e) {
  	const auto type = e->type();
  	if (type == QEvent::TouchBegin
 diff --git a/ui/widgets/scroll_area.h b/ui/widgets/scroll_area.h
-index a05ab78b40b2f3af5c4d3b3ff8795cb9b01f9893..0983378185c363e8070072a9f6425f40a1b6f6a8 100644
+index a05ab78b40b2f3af5c4d3b3ff8795cb9b01f9893..cb735cb109e8d32439f9f0e846009dad7c11ffe4 100644
 --- a/ui/widgets/scroll_area.h
 +++ b/ui/widgets/scroll_area.h
-@@ -238,6 +238,9 @@ private:
+@@ -238,6 +238,10 @@ private:
  	void touchUpdateSpeed();
  	void touchDeaccelerate(int32 elapsed);
  
 +	bool processSmoothWheel(not_null<QWheelEvent*> e);
 +	void smoothWheelStep(crl::time now);
++	bool smoothWheelFollowContent(int position, int max);
 +
  	bool _disabled = false;
  	bool _movingByScrollBar = false;
  
-@@ -270,6 +273,12 @@ private:
+@@ -270,6 +274,13 @@ private:
  	bool _wheelDirectionLocked = false;
  	bool _widgetAcceptsTouch = false;
  
@@ -246,6 +308,7 @@ index a05ab78b40b2f3af5c4d3b3ff8795cb9b01f9893..0983378185c363e8070072a9f6425f40
 +	int _smoothWheelFrom = 0;
 +	int _smoothWheelTarget = 0;
 +	int _smoothWheelLastApplied = -1;
++	int _smoothWheelLastMax = 0;
 +	crl::time _smoothWheelStart = 0;
 +
  	object_ptr<QWidget> _widget = { nullptr };

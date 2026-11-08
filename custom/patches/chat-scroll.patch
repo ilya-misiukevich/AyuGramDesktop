@@ -1,0 +1,13 @@
+diff --git a/Telegram/SourceFiles/history/history_widget.cpp b/Telegram/SourceFiles/history/history_widget.cpp
+index 520fd336e4c13a4e373ead2ccb36bb085f6a915f..8dfc647e383bcd629300a1a6d171794961dd81f3 100644
+--- a/Telegram/SourceFiles/history/history_widget.cpp
++++ b/Telegram/SourceFiles/history/history_widget.cpp
+@@ -1974,7 +1974,7 @@ void HistoryWidget::animatedScrollToY(int scrollTo, HistoryItem *attachTo) {
+ 		relativeFrom,
+ 		relativeTo,
+ 		st::slideDuration,
+-		anim::sineInOut);
++		transition);
+ }
+ 
+ void HistoryWidget::scrollToAnimationCallback(

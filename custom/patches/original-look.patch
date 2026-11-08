@@ -1,5 +1,5 @@
 diff --git a/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp b/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp
-index 6783c21a3d70ddbd9347c9be19196ba77f2b8adf..bbd92fa01076fb10901e9449744a0dfd5e9c5616 100644
+index 6783c21a3d70ddbd9347c9be19196ba77f2b8adf..eba87721d135bcf600334a7ac135fb57763251eb 100644
 --- a/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp
 +++ b/Telegram/SourceFiles/ayu/ui/components/avatar_corners_preview.cpp
 @@ -10,6 +10,7 @@
@@ -10,7 +10,7 @@ index 6783c21a3d70ddbd9347c9be19196ba77f2b8adf..bbd92fa01076fb10901e9449744a0dfd
  #include "main/main_session.h"
  #include "styles/style_ayu_icons.h"
  #include "styles/style_dialogs.h"
-@@ -63,14 +64,11 @@ void AvatarCornersPreview::paintEvent(QPaintEvent *e) {
+@@ -63,15 +64,11 @@ void AvatarCornersPreview::paintEvent(QPaintEvent *e) {
  		_emptyUserpic.paintCircle(p, userpicX, userpicY, width(), photoSize);
  	}
  
@@ -23,26 +23,53 @@ index 6783c21a3d70ddbd9347c9be19196ba77f2b8adf..bbd92fa01076fb10901e9449744a0dfd
 -	const auto nameWidth = st::semiboldFont->width(nameText);
 -	const auto &badge = st::dialogsExteraOfficialIcon.icon;
 -	badge.paint(p, row.nameLeft + xShift + nameWidth, row.nameTop, width());
- 
+-
  	p.setPen(st::dialogsTextFg);
  	p.setFont(st::dialogsTextFont);
-@@ -95,15 +93,12 @@ void AvatarCornersPreview::mouseReleaseEvent(QMouseEvent *e) {
+ 	p.drawText(row.textLeft + xShift, row.textTop + st::dialogsTextFont->ascent, u"Better late than never"_q);
+@@ -94,39 +91,12 @@ void AvatarCornersPreview::mouseReleaseEvent(QMouseEvent *e) {
+ 	if (_ripple) {
  		_ripple->lastStop();
  	}
- 	if (e->button() == Qt::LeftButton && rect().contains(e->pos())) {
+-	if (e->button() == Qt::LeftButton && rect().contains(e->pos())) {
 -		_controller->showPeerByLink(Window::PeerByLinkInfo{
 -			.usernameOrId = u"AyuGramReleases"_q,
 -		});
- 	}
+-	}
  }
  
  void AvatarCornersPreview::resolveChannel() {
- 	const auto session = &_controller->session();
+-	const auto session = &_controller->session();
 -	_peer = session->data().peerByUsername(u"AyuGramReleases"_q);
-+	_peer = session->user().get();
- 	if (_peer) {
- 		_peer->loadUserpic();
- 		subscribeToUpdates();
+-	if (_peer) {
+-		_peer->loadUserpic();
+-		subscribeToUpdates();
+-		return;
+-	}
+-	const auto weak = base::make_weak(this);
+-	session->api().request(MTPcontacts_ResolveUsername(
+-		MTP_flags(0),
+-		MTP_string(u"AyuGramReleases"_q),
+-		MTP_string()
+-	)).done([=](const MTPcontacts_ResolvedPeer &result) {
+-		if (const auto strong = weak.get()) {
+-			session->data().processUsers(result.data().vusers());
+-			session->data().processChats(result.data().vchats());
+-			strong->_peer = session->data().peerLoaded(
+-				peerFromMTP(result.data().vpeer()));
+-			if (strong->_peer) {
+-				strong->_peer->loadUserpic();
+-				strong->subscribeToUpdates();
+-			}
+-			strong->update();
+-		}
+-	}).send();
++	_peer = _controller->session().user().get();
++	_peer->loadUserpic();
++	subscribeToUpdates();
+ }
+ 
+ void AvatarCornersPreview::subscribeToUpdates() {
 diff --git a/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp b/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp
 index 79d9de000f080fd87995efd898966ba2cba58e06..ad21aa66db43a09980b317e62ac96d8fd9c55b93 100644
 --- a/Telegram/SourceFiles/ayu/ui/components/message_preview.cpp

@@ -463,6 +463,19 @@ void AnimateTint(not_null<PageState*> state, std::optional<QColor> to) {
 	});
 }
 
+#ifdef Q_OS_WIN
+void RemoveOldAppIcos() {
+	const auto current = QFileInfo(AyuAssets::appIcoPath());
+	const auto dir = current.absoluteDir();
+	const auto names = dir.entryList({ u"AyuGram-*.ico"_q }, QDir::Files);
+	for (const auto &name : names) {
+		if (name.compare(current.fileName(), Qt::CaseInsensitive) != 0) {
+			QFile::remove(dir.filePath(name));
+		}
+	}
+}
+#endif
+
 void ApplyIcon(const QString &id) {
 	auto &settings = AyuSettings::getInstance();
 	if (settings.appIcon() == id) {
@@ -473,6 +486,7 @@ void ApplyIcon(const QString &id) {
 #ifdef Q_OS_WIN
 	AyuAssets::loadAppIco();
 	reloadAppIconFromTaskBar();
+	RemoveOldAppIcos(); // shortcuts already point to the new file
 #endif
 
 	Window::OverrideApplicationIcon(AyuAssets::currentAppLogo());
