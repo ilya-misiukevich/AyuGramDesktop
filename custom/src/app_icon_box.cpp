@@ -470,7 +470,9 @@ void RemoveOldAppIcos() {
 	const auto names = dir.entryList({ u"AyuGram-*.ico"_q }, QDir::Files);
 	for (const auto &name : names) {
 		if (name.compare(current.fileName(), Qt::CaseInsensitive) != 0) {
-			QFile::remove(dir.filePath(name));
+			auto f = QFile(dir.filePath(name));
+			f.setPermissions(QFile::WriteOther); // copied from resources read-only
+			f.remove();
 		}
 	}
 }
@@ -511,6 +513,16 @@ void ApplyIcon(const QString &id) {
 		+ st::iconPickerSelectedPadding * 2
 		+ st::appIconPageCaptionSkip
 		+ st::normalFont->height * kCaptionLines;
+}
+
+// The window is as tall as the AyuGram tab for every tab, longer tabs scroll.
+[[nodiscard]] int SizingIconsCount() {
+	for (const auto &group : Groups()) {
+		if (group.title == u"AyuGram"_q) {
+			return int(group.icons.size());
+		}
+	}
+	return 0;
 }
 
 [[nodiscard]] int GridHeight(int count, int width) {
@@ -928,16 +940,10 @@ void AppIconSection::setupContent() {
 	widthValue() | rpl::on_next([=](int width) {
 		const auto &padding = st::appIconPageGridPadding;
 		const auto gridWidth = width - padding.left() - padding.right();
-		auto tallest = 0;
-		for (const auto &group : Groups()) {
-			tallest = std::max(
-				tallest,
-				GridHeight(int(group.icons.size()), gridWidth));
-		}
 		_desiredHeight = HeroBodyHeight()
 			+ st::appIconPageGridTop
 			+ padding.top()
-			+ tallest
+			+ GridHeight(SizingIconsCount(), gridWidth)
 			+ padding.bottom()
 			+ st::appIconPageGridBottom;
 	}, lifetime());
