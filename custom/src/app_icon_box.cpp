@@ -515,22 +515,17 @@ void ApplyIcon(const QString &id) {
 		+ st::normalFont->height * kCaptionLines;
 }
 
-// The window is as tall as the AyuGram tab for every tab, longer tabs scroll.
-[[nodiscard]] int SizingIconsCount() {
-	for (const auto &group : Groups()) {
-		if (group.title == u"AyuGram"_q) {
-			return int(group.icons.size());
-		}
-	}
-	return 0;
-}
-
 [[nodiscard]] int GridHeight(int count, int width) {
 	const auto columns = ColumnsForWidth(width);
 	const auto rows = (count + columns - 1) / columns;
 	return rows
 		? (rows * GridRowHeight() + (rows - 1) * st::appIconPageRowSkip)
 		: 0;
+}
+
+// The window asks for one empty row more, a list that has to scroll ends sooner.
+[[nodiscard]] int WindowBottomSkip() {
+	return st::appIconPageRowSkip + GridRowHeight();
 }
 
 class IconsGrid final : public Ui::RpWidget {
@@ -937,15 +932,20 @@ void AppIconSection::setupContent() {
 	Ui::AddSkip(content, st::appIconPageGridBottom);
 	Ui::ResizeFitChild(this, content);
 
-	widthValue() | rpl::on_next([=](int width) {
+	rpl::combine(
+		widthValue(),
+		_state->tab.value()
+	) | rpl::on_next([=](int width, int tab) {
 		const auto &padding = st::appIconPageGridPadding;
 		const auto gridWidth = width - padding.left() - padding.right();
+		const auto &all = Groups();
+		const auto &group = all[std::clamp(tab, 0, int(all.size()) - 1)];
 		_desiredHeight = HeroBodyHeight()
 			+ st::appIconPageGridTop
 			+ padding.top()
-			+ GridHeight(SizingIconsCount(), gridWidth)
+			+ GridHeight(int(group.icons.size()), gridWidth)
 			+ padding.bottom()
-			+ st::appIconPageGridBottom;
+			+ WindowBottomSkip();
 	}, lifetime());
 
 	_isLayer.changes() | rpl::on_next([=] {

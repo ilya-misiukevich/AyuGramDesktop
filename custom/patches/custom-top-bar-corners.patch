@@ -1,0 +1,16 @@
+diff --git a/Telegram/SourceFiles/info/settings/info_settings_widget.cpp b/Telegram/SourceFiles/info/settings/info_settings_widget.cpp
+index 39b6f7f824a776a6e11a50c155c443edaf8b61e1..324c1de30cdbf274acc1806b78428dbcfd6c344d 100644
+--- a/Telegram/SourceFiles/info/settings/info_settings_widget.cpp
++++ b/Telegram/SourceFiles/info/settings/info_settings_widget.cpp
+@@ -100,6 +100,11 @@ Widget::Widget(
+ 		) | rpl::on_next([=](int h) {
+ 			setScrollTopSkip(h);
+ 		}, _pinnedToTop->lifetime());
++
++		// A custom top bar rounds its own top corners in a layer.
++		if (_type->hasCustomTopBar()) {
++			setPaintPadding({ 0, _pinnedToTop->minimumHeight(), 0, 0 });
++		}
+ 	}
+ 
+ 	if (_pinnedToBottom) {
