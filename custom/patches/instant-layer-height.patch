@@ -1,0 +1,50 @@
+diff --git a/Telegram/SourceFiles/info/info_layer_widget.cpp b/Telegram/SourceFiles/info/info_layer_widget.cpp
+index 4ad4fab661b3d10bbbfbd182f024ef9d8f43ab44..181e82603da26171ab124d10ee81cec0b2327d0b 100644
+--- a/Telegram/SourceFiles/info/info_layer_widget.cpp
++++ b/Telegram/SourceFiles/info/info_layer_widget.cpp
+@@ -23,7 +23,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "styles/style_info.h"
+ #include "styles/style_layers.h"
+ 
++// AyuGram includes
++#include "settings/settings_common_session.h"
++
++
+ namespace Info {
++namespace {
++
++[[nodiscard]] bool InstantHeight(not_null<Controller*> controller) {
++	const auto section = controller->section();
++	return (section.type() == Section::Type::Settings)
++		&& section.settingsType()->instantLayerHeight();
++}
++
++} // namespace
+ 
+ LayerWidget::LayerWidget(
+ 	not_null<Window::SessionController*> controller,
+@@ -122,8 +135,10 @@ void LayerWidget::setupHeightConsumers() {
+ 		}
+ 		std::swap(_desiredHeight, height);
+ 		if (!height
++			|| InstantHeight(_contentWrap->controller())
+ 			|| (_heightAnimated && !_heightAnimation.animating())) {
+ 			_heightAnimated = true;
++			_heightAnimation.stop();
+ 			setContentHeight(_desiredHeight);
+ 		} else {
+ 			_heightAnimated = true;
+diff --git a/Telegram/SourceFiles/settings/settings_common_session.h b/Telegram/SourceFiles/settings/settings_common_session.h
+index 22546d124088f536d5c0a1c6082045e786c25665..2eb2b0dc4dd6e9897e007bd7c6417c3b53fe7f36 100644
+--- a/Telegram/SourceFiles/settings/settings_common_session.h
++++ b/Telegram/SourceFiles/settings/settings_common_session.h
+@@ -43,6 +43,9 @@ struct AbstractSectionFactory {
+ 	[[nodiscard]] virtual bool hasCustomTopBar() const {
+ 		return false;
+ 	}
++	[[nodiscard]] virtual bool instantLayerHeight() const {
++		return false;
++	}
+ 
+ 	virtual ~AbstractSectionFactory() = default;
+ };

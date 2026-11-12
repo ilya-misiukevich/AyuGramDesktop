@@ -797,6 +797,9 @@ struct SectionFactory<AppIconSection> : AbstractSectionFactory {
 	bool hasCustomTopBar() const final override {
 		return true;
 	}
+	bool instantLayerHeight() const final override {
+		return true;
+	}
 
 	[[nodiscard]] static const std::shared_ptr<SectionFactory> &Instance() {
 		static const auto result = std::make_shared<SectionFactory>();
@@ -940,12 +943,14 @@ void AppIconSection::setupContent() {
 		const auto gridWidth = width - padding.left() - padding.right();
 		const auto &all = Groups();
 		const auto &group = all[std::clamp(tab, 0, int(all.size()) - 1)];
-		_desiredHeight = HeroBodyHeight()
-			+ st::appIconPageGridTop
-			+ padding.top()
-			+ GridHeight(int(group.icons.size()), gridWidth)
-			+ padding.bottom()
-			+ WindowBottomSkip();
+		_desiredHeight = std::min(
+			HeroBodyHeight()
+				+ st::appIconPageGridTop
+				+ padding.top()
+				+ GridHeight(int(group.icons.size()), gridWidth)
+				+ padding.bottom()
+				+ WindowBottomSkip(),
+			HeroBodyHeight() + st::boxMaxListHeight);
 	}, lifetime());
 
 	_isLayer.changes() | rpl::on_next([=] {
