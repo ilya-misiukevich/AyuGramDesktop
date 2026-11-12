@@ -1,12 +1,13 @@
 diff --git a/Telegram/SourceFiles/info/info_layer_widget.cpp b/Telegram/SourceFiles/info/info_layer_widget.cpp
-index 4ad4fab661b3d10bbbfbd182f024ef9d8f43ab44..181e82603da26171ab124d10ee81cec0b2327d0b 100644
+index 4ad4fab661b3d10bbbfbd182f024ef9d8f43ab44..9903d21a2f556b03898af1c2d8be5fb729a16731 100644
 --- a/Telegram/SourceFiles/info/info_layer_widget.cpp
 +++ b/Telegram/SourceFiles/info/info_layer_widget.cpp
-@@ -23,7 +23,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -23,7 +23,21 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "styles/style_info.h"
  #include "styles/style_layers.h"
  
 +// AyuGram includes
++#include "info/info_controller.h"
 +#include "settings/settings_common_session.h"
 +
 +
@@ -23,7 +24,7 @@ index 4ad4fab661b3d10bbbfbd182f024ef9d8f43ab44..181e82603da26171ab124d10ee81cec0
  
  LayerWidget::LayerWidget(
  	not_null<Window::SessionController*> controller,
-@@ -122,8 +135,10 @@ void LayerWidget::setupHeightConsumers() {
+@@ -122,8 +136,10 @@ void LayerWidget::setupHeightConsumers() {
  		}
  		std::swap(_desiredHeight, height);
  		if (!height
